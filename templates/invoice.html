@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: Ubuntu, 'WebFont-Ubuntu';
+      font-size: 9pt;
+      color: #333333;
+      background: #ffffff;
+    }
+
+    #template {
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+      width: 100%;
+    }
+
+    #template-body {
+      padding: 0 0.400000in 0 0.550000in;
+			min-width: 500px;
+			overflow-x: auto;
+    }
+
+    #header {
+      padding: 0 0.400000in 0 0.550000in;
+      height: 0.700000in;
+    }
+
+    #header-content {
+      font-size: 9pt;
+      color: #333333;
+      background-color: #ffffff;
+    }
+
+    #template-fill-emptydiv {
+      display: table-cell;
+      content: " ";
+      width: 100%;
+    }
+
+    #body {
+      padding: 0 0.400000in 0 0.550000in;
+    }
+
+    #orgname {
+      font-size: 20pt;
+      color: #333333;
+    }
+
+    #label {
+      font-size: 15px;
+      color: #333333;
+    }
+
+    .text-align-right {
+      text-align: right;
+    }
+
+    .v-top {
+      vertical-align: top;
+    }
+
+    #entity-title {
+      font-size: 28pt;
+      color: #000000;
+    }
+
+    #billto-section {
+      padding-top: 0mm;
+      padding-left: 0mm;
+    }
+
+    #customer-name {
+      font-size: 15pt;
+      color: #333333;
+    }
+
+    #shipto-section {
+      padding-top: 0mm;
+      padding-left: 0mm;
+    }
+
+    #source-of-supply {
+      margin-top: 20px;
+      line-height: 14pt;
+      font-size: 16px;
+    }
+
+    #item-table {
+      margin-top: 20px;
+    }
+
+    #item-table-header {
+      font-size: 12pt;
+      color: #ffffff;
+      background-color: #3c3d3a;
+    }
+
+    .item-row {
+      font-size: 12pt;
+      border-bottom: 1px solid #adadad;
+      background-color: #ffffff;
+      color: #000000;
+    }
+
+    .lineitem-column {
+      padding: 10px 10px 5px 10px;
+      word-wrap: break-word;
+      vertical-align: top;
+    }
+
+    #item-desc {
+      color: #727272;
+      font-size: 9pt;
+    }
+
+    .lineitem-content-right {
+      padding: 10px 10px 10px 5px;
+    }
+
+    #total-section {
+      width: 50%;
+      float: right;
+    }
+
+    #totals {
+      font-size: 12pt;
+      color: #000000;
+      background-color: #ffffff;
+    }
+
+    #total-section-label {
+      width: 40%;
+      padding: 5px 10px 5px 0;
+      vertical-align: middle;
+    }
+
+    #total-section-value {
+      width: 120px;
+      vertical-align: middle;
+      padding: 10px 10px 10px 5px;
+    }
+
+    #balance {
+      background-color: #f5f4f3;
+      font-size: 12pt;
+      color: #000000;
+    }
+
+    #notes {
+      font-size: 8pt;
+    }
+
+    #footer {
+      height: 0.700000in;
+      font-size: 6pt;
+      color: #aaaaaa;
+      padding: 0 0.400000in 0 0.550000in;
+      background-color: #ffffff;
+    }
+  </style>
+</head>
+
+<body>
+  <div style="border: 1px solid #000; padding: 5px;">
+    <div id='template'>
+      <div style="min-height: 700px; display: flex; flex-direction: column; justify-content: space-between;" id="template-body" id='template-body'>
+        <table style="width: 100%; table-layout: fixed;">
+          <tbody>
+            <tr>
+							<td style="vertical-align: top; width: 50%;">
+                <div class="mt-4">
+                  <div style="font-size: 18px; color: #333333;"><b>{{ invoice.vendor_name }}</b></div>
+                  <div style="font-size: 15px; color: #333333;">
+                    <div>{{ invoice.vendor_billing_address }}</div>
+                    {% if invoice.is_oversea %}
+											<div></div>
+										{% else %}
+                      <div>GSTIN: {{ invoice.vendor_gst }}</div>
+                    {% endif %}
+                    <div>{{ invoice.email }}</div>
+                    <div>{{ invoice.phone }}</div>
+                  </div>
+                </div>
+              </td>
+							<td style="width: 50%; text-align: right; vertical-align: top;">
+                {% if invoice.is_oversea or invoice.vendor_gst == "" %}
+                    <div style="font-size: 18pt; margin: 0pt; padding: 0pt;">INVOICE</div><br />
+                {% else %}
+                    <div style="font-size: 18pt; margin: 0pt; padding: 0pt;">TAX INVOICE</div><br />
+                {% endif %}
+                <div id="entity-number" style="font-size: 12pt;">Invoice No.<b>{{ invoice.invoice_number }}</b></div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <table style="clear: both; width: 100%; margin-top: 30px; table-layout: fixed;">
+          <tbody>
+            <tr>
+              <td style="width: 60%; vertical-align: bottom; word-wrap: break-word;">
+								<div id="billto-section">
+                  <div style="font-size: 15pt; color: #333333;">Invoice to:</div>
+                  <div style="font-size: 16px;">
+                    <strong>
+                      <div id="customer-name">{{ invoice.customer_name }}</div>
+                      GSTIN {{ invoice.customer_gst }}
+                    </strong>
+                  </div>
+                </div>
+              </td>
+              <td valign="right" style="vertical-align: bottom; width: 40%;">
+									<table style="float: right; width: 100%; table-layout: fixed; word-wrap: break-word;">
+										<tbody>
+											<tr>
+												<td style="padding: 5px 10px 5px 0px; font-size: 10pt; text-align: right;">
+													<span>Invoice Date:</span>
+												</td>
+												<td style="text-align: right;">
+													<span id="entity-date" style="font-size: 16px;">
+														{{ invoice.invoice_date }}
+													</span>
+												</td>
+											</tr>
+	
+											<tr>
+												<td style="padding: 5px 10px 5px 0px; font-size: 10pt; text-align: right;">
+													<span>Due Date:</span>
+												</td>
+												<td style="text-align: right;">
+													<span style="white-space: nowrap; font-size: 16px;" id="due-date">
+														{{ invoice.due_date}}
+													</span>
+												</td>
+											</tr>
+											<tr>
+												<td style="padding: 5px 10px 5px 0px; font-size: 10pt; text-align: right;">
+													<span>P.O.#:</span>
+												</td>
+												<td style="text-align: right;">
+													<span style="white-space: nowrap; font-size: 16px;" id="ref-number">
+														{{ invoice.purchase_order_no }}
+													</span>
+												</td>
+											</tr>
+										</tbody>
+									</table>
+             	</td>
+            </tr>
+          </tbody>
+          </table>
+
+          <table style="width: 100%; margin-top: 20px; table-layout: fixed; border: 1px solid gray;" border="1" cellspacing="0" cellpadding="0">
+            <thead>
+              <tr style="height: 32px;">
+                <td style="padding: 2px; width: 50px; text-align: center; border: 1px solid black;">S. No.</td>
+                <td style="padding: 5px 0px 5px 5px; text-align: left; border: 1px solid black;">Item & Description</td>
+                <td style="padding: 5px 10px 5px 5px; text-align: right; border: 1px solid black;">Qty</td>
+                <td style="padding: 5px 10px 5px 5px; text-align: right; border: 1px solid black;">Rate</td>
+                <td style="padding: 5px 10px 5px 5px; text-align: right; border: 1px solid black;">Amount</td>
+                <td style="padding: 5px 10px 5px 5px; text-align: right; border: 1px solid black;">Tax</td>
+                <td style="padding: 5px 10px 5px 5px; text-align: right; border: 1px solid black;">HSN/SAC</td>
+                <td style="padding: 5px 10px 5px 5px; text-align: right; border: 1px solid black;">Amount (Including tax)</td>
+              </tr>
+            </thead>
+
+            <tbody>
+							{% for item in invoice.line_items %}
+							<tr>
+								<td style="text-align: center; word-wrap: break-word; border: 1px solid black;">{{ forloop.counter }}</td>
+								<td style="padding: 10px 0 10px 2px; border: 1px solid black;">
+									<div><span style="word-wrap: break-word;">{{ item.name|default:item.description|default:"Item" }}</span></div>
+								</td>
+								<td style="padding: 10px 10px 5px 1px; text-align: right; border: 1px solid black;">{{ item.quantity_input }}</td>
+								<td style="padding: 10px 10px 5px 1px; text-align: right; border: 1px solid black;">{{ item.rate }}</td>
+								<td style="padding: 10px 10px 5px 5px; border: 1px solid black;" class="lineitem-content-right text-align-right">{{ item.quantity_mul_rate }}</td>
+								<td style="padding: 10px 10px 5px 5px; border: 1px solid black;" class="lineitem-content-right text-align-right"><div>{{ item.tax_percentage }} %</div></td>
+								<td style="padding: 10px 10px 5px 1px; text-align: center; word-wrap: break-word; border: 1px solid black;">{{ item.hsn_sac }}</td>
+								<td style="padding: 10px 10px 5px 5px; border: 1px solid black;" class="lineitem-content-right text-align-right">{{ item.quantity_mul_rate_include_tax }}</td>
+							</tr>
+						{% endfor %}
+
+            </tbody>
+          </table>
+
+					<table style="margin-top: 4px;" cellspacing="0" border="0" width="100%">
+            <tbody>
+              <tr>
+                <td id="total" style="text-align: right;"><span style="font-weight: bold;">Total: </span>{{ invoice.total }}</td>
+              </tr>
+            </tbody>
+          </table>
+
+
+					<div style="clear: both; margin-top: 50px; width: 100%;">
+						<label style="font-size: 15pt;">Notes</label>
+						<p style="margin-top: 7px; white-space: pre-wrap; word-wrap: break-word; font-size: 12pt;">{{ invoice.customer_notes|default:'No notes added.' }}</p>
+					</div>
+
+					<table style="width: 100%; margin-bottom: 8px;">
+						<thead>
+							<tr>
+								<td style="text-align: right; width: 100%;">
+									Signature:
+									<img style="width: 100px; height: auto; display: inline-block;" alt="signature"  src="data:image/png;base64, {{image_base64}}"  />
+								</td>
+							</tr>
+						</thead>
+					</table>
+        </div>
+      </div>
+    </div>
+
+    <div style="background-color: #f0f0f0; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
+			<div class="font-semibold mb-2">Bank Account Details:</div>
+			<p style="margin-bottom: 2px;">Beneficiary Name: {{ invoice.beneficiary_name }}</p>
+			<p style="margin-bottom: 2px;">Bank Name: {{ invoice.bank_name }}</p>
+			<p style="margin-bottom: 2px;">Account Number: {{ invoice.account_number }}</p>
+			{% if invoice.is_oversea_account %}
+				<p style="margin-bottom: 2px;">TIN Number: {{ invoice.tin_number }}</p>
+				<p style="margin-bottom: 2px;">
+					{% if invoice.type_of_code == "iban" %}
+						IBAN: {{ invoice.iban }}
+					{% elif invoice.type_of_code == "swift_code" %}
+						Swift Code {{ invoice.swift_code }}
+					{% endif %}
+				</p>
+			{% else %}
+				<p style="margin-bottom: 2px;">IFSC Code: {{ invoice.ifsc_code }}</p>
+			{% endif %}
+		</div>
+
+
+	
+  </div>
+</body>
+</html>

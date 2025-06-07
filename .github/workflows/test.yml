@@ -1,0 +1,29 @@
+name: Django CI/CD for Staging Meeraq
+on:
+  push:
+    branches: [dev-review]
+
+jobs:
+  deploy-to-qa:
+    runs-on: ubuntu-latest
+    name: Deploy to QA Server
+    steps:
+    - name: Configure SSH
+      run: |
+        mkdir -p ~/.ssh/
+        echo "$SSH_KEY" > ~/.ssh/operations-backend.key
+        chmod 600 ~/.ssh/operations-backend.key
+        cat >>~/.ssh/config <<END
+        Host qa-backend
+          HostName $SSH_HOST
+          User $SSH_USER
+          IdentityFile ~/.ssh/operations-backend.key
+          StrictHostKeyChecking no
+        END
+      env:
+        SSH_USER: ${{ secrets.SERVER_USERNAME }}
+        SSH_KEY: ${{ secrets.SERVER_PRIVATE_KEY }}
+        SSH_HOST: ${{ secrets.SERVER_HOST }}
+
+    - name: Test SSH Connection
+      run: ssh qa-backend 'echo "Hello World"'

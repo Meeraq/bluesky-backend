@@ -1,0 +1,47 @@
+{% extends "table_parent_template.html" %} 
+{% block title %}
+   Meeraq Platform | OTP to login
+{% endblock %}
+
+{% block content %}
+<tr style="border: 0">
+    <td style="padding: 20px; background: #f8f7f8; border: 0">
+        <div align="center">
+            <table border="0" cellpadding="0" cellspacing="0" style="
+              width: 100%;
+              mso-cellspacing: 0cm;
+              background: #f8f7f8;
+              mso-yfti-tbllook: 1184;
+              mso-padding-alt: 0cm 0cm 0cm 0cm;
+            " width="100%">
+                <tbody>
+                    <tr style="
+                  mso-yfti-irow: 0;
+                  mso-yfti-firstrow: yes;
+                  mso-yfti-lastrow: yes;
+                ">
+                        <td style="padding: 15pt 15pt 15pt 15pt">
+                            <p>
+                                <strong><span style="font-size: 14px">Dear&nbsp;</span></strong><b>{{name}}</b><strong>,</strong>
+                            </p>
+                            <p>
+                                Here is your OTP to login to the Meeraq Platform:
+                            </p>
+                            <p><b>{{otp}}</b></p>
+                            <p>
+                                If you face any issues or have queries, please email us at
+                                <a href="mailto:pmocoaching@meeraq.com">pmocoaching@meeraq.com</a>.
+                            </p>
+
+                            <p><br /></p>
+                            <p>Best regards,</p>
+                            <p>Team Meeraq.</p>
+
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </td>
+</tr>
+{% endblock %}

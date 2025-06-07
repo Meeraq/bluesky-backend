@@ -1,0 +1,68 @@
+{% extends "table_parent_template.html" %} {% block title %}Meeraq Coaching{%endblock%}
+{% block content %}
+<tr style="border: 0">
+	<td style="padding: 20px; background: #f8f7f8; border: 0">
+		<div align="center">
+			<table border="0" cellpadding="0" cellspacing="0" style="
+          width: 100%;
+          mso-cellspacing: 0cm;
+          background: #f8f7f8;
+          mso-yfti-tbllook: 1184;
+          mso-padding-alt: 0cm 0cm 0cm 0cm;
+        " width="100%">
+				<tbody>
+					<tr style="
+              mso-yfti-irow: 0;
+              mso-yfti-firstrow: yes;
+              mso-yfti-lastrow: yes;
+            ">
+						<td style="padding: 15pt 15pt 15pt 15pt">
+							<p>
+								<strong><span style="font-size: 16px">Dear&nbsp;</span></strong><b>{{name}}</b><strong>,</strong>
+							</p>
+							<p class="child-para" style="color: #333; font-size: 14px; font-weight: bold">
+								Greetings from Meeraq!!
+							</p>
+							<br />
+							<p class="child-para">We are thrilled to let you know regarding our new vendor's platform. Here you can:
+							</p>
+							<p class="child-para">
+							<p>1. View all your Purchase Orders.</p>
+							<p>2. Generate invoice against the orders.</p>
+							<p>3. Track the status of invoices.</p>
+							</p>
+							<br />
+							<p class="child-para">
+								Now you don't have to create your invoices manually and no need to send a mail with the attached
+								invoice. Meeraq
+								platform will take care of this when you create an invoice here.
+							</p>
+							<br />
+							<p class="child-para">
+								What you can't do:
+							</p>
+							<p class="child-para">1. You cannot raise invoices for the expense incurred.</p>
+							<br />
+							<p class="child-para">
+								We will be rolling out this feature in later version.
+							</p>
+							<br />
+							<p class="child-para"><strong><a href="{{link}}">
+										Click here
+									</a>
+									to set your password on the platform.
+								</strong></p>
+							<p class="child-para">Feel free to contact <a
+									href="mailto:pmocoaching@meeraq.com">pmocoaching@meeraq.com</a> for any
+								queries.</p>
+							<p><br /></p>
+							<p>Best regards,</p>
+							<p>Team Meeraq.</p>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	</td>
+</tr>
+{% endblock %}

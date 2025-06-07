@@ -1,0 +1,84 @@
+name: Django CI/CD for QA2 Meeraq Backend
+on:
+  push:
+    branches: [qa2]
+
+jobs:
+  deploy-to-qa2:
+    runs-on: ubuntu-latest
+    name: Deploy to QA2 Server
+    if: github.ref == 'refs/heads/qa2'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      
+    - name: Setup OpenVPN
+      env:
+        QA_SSH_USER: ${{ secrets.QA_SSH_USER }}
+        QA_SSH_PRIVATE_KEY: ${{ secrets.QA_SSH_PRIVATE_KEY }}
+        QA_SSH_HOST_NAME: ${{ secrets.QA_SSH_HOST_NAME }}
+        QA_OVPN_FILE_CONTENT: ${{ secrets.QA_OVPN_FILE_CONTENT }}
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y openvpn
+        echo "$QA_OVPN_FILE_CONTENT" > ~/creds.ovpn
+        mkdir -p ~/.ssh/
+        echo "$QA_SSH_PRIVATE_KEY" > ~/.ssh/operations-backend.key
+        chmod 600 ~/.ssh/operations-backend.key
+        sudo openvpn --config ~/creds.ovpn --daemon
+        sleep 20
+        timeout=60
+        interval=5
+        elapsed=0
+        check_vpn_connection() {
+          ssh -i ~/.ssh/operations-backend.key -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes -q "${{ secrets.QA_SSH_USER }}"@"${{ secrets.QA_SSH_HOST_NAME }}" "true"
+        }
+        until check_vpn_connection; do
+          if [ $elapsed -ge $timeout ]; then
+            echo "VPN connection timed out."
+            exit 1
+          fi
+          echo "Waiting for VPN connection..."
+          sleep $interval
+          elapsed=$((elapsed + interval))
+        done
+        echo "VPN Connected."
+
+    - name: Configure SSH
+      env:
+        QA_SSH_USER: ${{ secrets.QA_SSH_USER }}
+        QA_SSH_PRIVATE_KEY: ${{ secrets.QA_SSH_PRIVATE_KEY }}
+        QA_SSH_HOST_NAME: ${{ secrets.QA_SSH_HOST_NAME }}
+      run: |
+        mkdir -p ~/.ssh/
+        echo "$QA_SSH_PRIVATE_KEY" > ~/.ssh/operations-backend.key
+        chmod 600 ~/.ssh/operations-backend.key
+        cat >>~/.ssh/config <<END
+        Host operations-backend
+          HostName $QA_SSH_HOST_NAME
+          User $QA_SSH_USER
+          IdentityFile ~/.ssh/operations-backend.key
+          StrictHostKeyChecking no
+        END
+
+    - name: Checkout and Pull from Repository
+      run: ssh operations-backend 'cd ~/operations-backend/ && git checkout qa2 && git pull'
+
+    # - name: Install Python packages
+    #   run: ssh operations-backend 'cd ~/operations-backend/ && . venv/bin/activate && pip install -r requirements.txt'
+
+    # - name: Migrate DB Changes and Collect Static
+    #   run: ssh operations-backend 'cd ~/operations-backend/ && . venv/bin/activate && python manage.py migrate && python manage.py collectstatic --no-input'
+
+    # - name: Restart the Backend Service
+    #   run: ssh operations-backend 'sudo systemctl restart operations-backend'
+
+    # - name: Restart the Celery Service
+    #   run: ssh operations-backend 'sudo systemctl restart celery'
+    
+    - name: Cleanup
+      run: |
+        # Kill the OpenVPN process
+        sudo killall openvpn
+        rm ~/creds.ovpn
+        echo "ALL DONE"

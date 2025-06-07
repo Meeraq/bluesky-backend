@@ -1,0 +1,65 @@
+{% extends "table_parent_template.html" %} {% block title %}Meeraq | New Sales
+Order Created{% endblock %} {% block content %}
+<tr style="border: 0">
+  <td style="padding: 20px; background: #f8f7f8; border: 0">
+    <div align="center">
+      <table
+        border="0"
+        cellpadding="0"
+        cellspacing="0"
+        style="
+          width: 100%;
+          mso-cellspacing: 0cm;
+          background: #f8f7f8;
+          mso-yfti-tbllook: 1184;
+          mso-padding-alt: 0cm 0cm 0cm 0cm;
+        "
+        width="100%"
+      >
+        <tbody>
+          <tr
+            style="
+              mso-yfti-irow: 0;
+              mso-yfti-firstrow: yes;
+              mso-yfti-lastrow: yes;
+            "
+          >
+            <td style="padding: 15pt 15pt 15pt 15pt">
+              <p>Dear Finance Team,</p>
+              <p>
+                This is to inform you that a new sales order has been created in
+                caas.
+              </p>
+              <p><strong>Sales Order Details:</strong></p>
+              <ul>
+                <li>SO Number: {{so_number}}</li>
+                <li>Customer Name: {{customer_name}}</li>
+                <li>
+                  Project Type: {% if project_type %} {{project_type}} {% else %}
+                 Not Assigned  {% endif %}
+                </li>
+                <li>
+                 Total Amount: {{currency_symbol}} {{total_amount}}
+                </li>
+                <li>Salesperson: {{salesperson}}</li>
+              </ul>
+              <p>
+                Attached to this email, you will find the sales order document
+                for your reference.
+              </p>
+              <p>
+                Please review the details of the sales order at your earliest
+                convenience. If you have any questions or require further
+                information, feel free to reach out to the sales team.
+              </p>
+              <p>Thank you for your attention to this matter.</p>
+              <p>Best regards,</p>
+              <p>Team Meeraq.</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </td>
+</tr>
+{% endblock %}

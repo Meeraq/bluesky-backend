@@ -1,0 +1,72 @@
+{% extends "table_parent_template.html" %} {% block title %}Meeraq | Invoice
+Approved {% endblock %} {% block content %}
+<tr style="border: 0">
+  <td style="padding: 20px; background: #f8f7f8; border: 0">
+    <div align="center">
+      <table
+        border="0"
+        cellpadding="0"
+        cellspacing="0"
+        style="
+          width: 100%;
+          mso-cellspacing: 0cm;
+          background: #f8f7f8;
+          mso-yfti-tbllook: 1184;
+          mso-padding-alt: 0cm 0cm 0cm 0cm;
+        "
+        width="100%"
+      >
+        <tbody>
+          <tr
+            style="
+              mso-yfti-irow: 0;
+              mso-yfti-firstrow: yes;
+              mso-yfti-lastrow: yes;
+            "
+          >
+            <td style="padding: 15pt 15pt 15pt 15pt">
+              <p>
+                <strong><span style="font-size: 16px">Dear&nbsp;</span></strong
+                ><b>Finance Team</b><strong>,</strong>
+              </p>
+              <p
+                class="child-para"
+                style="color: #333; font-size: 14px; font-weight: bold"
+              >
+                Greetings from Meeraq!!
+              </p>
+              <br />
+              <p class="child-para">
+                I trust this email finds you well. I am writing to inform you
+                that the invoice associated with Purchase Order:
+                {{purchase_order_no}} from {{vendor_name}} has been approved by
+                {{ approved_by }}.
+              </p>
+
+               <h3>Note: {{entity_info}}.</h3>
+
+              <p class="child-para">
+                Please proceed with the necessary actions for processing this
+                invoice accordingly.
+              </p>
+
+              <p class="child-para">"{{comment}}"</p>
+              <p class="child-para">
+                Should you require any further information or assistance, please
+                don't hesitate to reach out.
+              </p>
+              <p class="child-para">
+                Thank you for your attention to this matter.
+              </p>
+              <p><br /></p>
+              <p>Best regards,</p>
+              <p>Team Meeraq.</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </td>
+</tr>
+
+{% endblock %}

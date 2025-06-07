@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" style="margin: 0; padding: 0;">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ po_details.number }} - Purchase Order</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.4; color: #2C3E50; background-color: white;">
+    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+            <td>
+                <!-- Header Section with Background -->
+                <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background: #0861a3; -webkit-print-color-adjust: exact;">
+                    <tr>
+                        <td style="padding: 20px 40px;">
+                            <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                                <tr>
+                                    <td width="50%" style="vertical-align: middle;">
+                                        <table cellpadding="0" cellspacing="0" border="0" style="background: white; padding: 12px; border-radius: 6px;">
+                                            <tr>
+                                                <td style="vertical-align: middle;">
+                                                    <img src="{{ logo_path }}" alt="{{ company_info.name }} Logo" style="width: 120px; height: auto;">
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                    <td width="50%" style="text-align: right; vertical-align: middle; color: white;">
+                                        <div style="font-size: 24px; font-weight: 700; letter-spacing: 2px;">PURCHASE ORDER</div>
+                                        <div style="font-size: 16px; margin-top: 5px;">#{{ po_details.number }}</div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Main Content Area -->
+                <table cellpadding="0" cellspacing="0" border="0" width="100%" style="padding: 20px 40px;">
+                    <!-- Address Section -->
+                    <tr>
+                        <td>
+                            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 20px;">
+                                <tr>
+                                    <td width="48%" style="background: #f8f9fa; padding: 15px; border-radius: 6px;">
+                                        <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                                            <tr>
+                                                <td style="border-left: 4px solid #0861a3; padding-left: 10px;">
+                                                    <div style="font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 5px;">From</div>
+                                                    <div style="font-size: 14px; color: #333;">
+                                                        <strong>{{ company_info.name }}</strong><br>
+                                                        {{ company_info.address_line }}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                    <td width="4%"></td>
+                                    <td width="48%" style="background: #f8f9fa; padding: 15px; border-radius: 6px;">
+                                        <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                                            <tr>
+                                                <td style="border-left: 4px solid #FF4B2B; padding-left: 10px;">
+                                                    <div style="font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 5px;">Vendor</div>
+                                                    <div style="font-size: 14px; color: #333;">
+                                                        <strong>{{ vendor_info.name }}</strong><br>
+                                                        {% if vendor_info.address %}{{ vendor_info.address }}{% endif %}
+                                                        {% if vendor_info.city %}<br>{{ vendor_info.city }}{% endif %}
+                                                        {% if vendor_info.state %}, {{ vendor_info.state }}{% endif %}
+                                                        {% if vendor_info.zip %} - {{ vendor_info.zip }}{% endif %}
+                                                        {% if vendor_info.country %}<br>{{ vendor_info.country }}{% endif %}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Items Table -->
+                    <tr>
+                        <td style="padding-bottom: 20px;">
+                            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border: 1px solid #e1e1e1; border-radius: 6px; overflow: hidden;">
+                                <thead>
+                                    <tr style="background: #0861a3; color: white; -webkit-print-color-adjust: exact;">
+                                        <th width="5%" style="padding: 12px 15px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase;">#</th>
+                                        <th width="45%" style="padding: 12px 15px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase;">Description</th>
+                                        <th width="15%" style="padding: 12px 15px; text-align: center; font-size: 12px; font-weight: 600; text-transform: uppercase;">Qty</th>
+                                        <th width="15%" style="padding: 12px 15px; text-align: right; font-size: 12px; font-weight: 600; text-transform: uppercase;">Rate</th>
+                                        <th width="20%" style="padding: 12px 15px; text-align: right; font-size: 12px; font-weight: 600; text-transform: uppercase;">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in items %}
+                                    <tr style="{% if forloop.counter|divisibleby:2 %}background-color: #f8f9fa;{% endif %}">
+                                        <td style="padding: 10px 15px; font-size: 13px; border-bottom: 1px solid #e1e1e1;">{{ item.id }}</td>
+                                        <td style="padding: 10px 15px; font-size: 13px; border-bottom: 1px solid #e1e1e1;">{{ item.description }}</td>
+                                        <td style="padding: 10px 15px; font-size: 13px; text-align: center; border-bottom: 1px solid #e1e1e1;">{{ item.quantity }}</td>
+                                        <td style="padding: 10px 15px; font-size: 13px; text-align: right; border-bottom: 1px solid #e1e1e1;">{{ po_details.currency_symbol }}{{ item.rate }}</td>
+                                        <td style="padding: 10px 15px; font-size: 13px; text-align: right; border-bottom: 1px solid #e1e1e1; font-weight: 600;">{{ po_details.currency_symbol }}{{ item.amount }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Summary Section -->
+                    <tr>
+                        <td>
+                            <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                                <tr>
+                                    <!-- Notes Section -->
+                                    <td width="60%" style="vertical-align: top; padding-right: 30px;">
+                                        {% if notes %}
+                                        <div style="font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 5px;">Notes</div>
+                                        <div style="font-size: 13px; color: #333; padding: 10px; background: #f8f9fa; border-radius: 4px;">{{ notes }}</div>
+                                        {% endif %}
+                                        
+                                        <div style="margin-top: 30px;">
+                                            <table cellpadding="0" cellspacing="0" border="0" width="200px">
+                                                <tr>
+                                                    <td style="border-top: 2px solid #0861a3; padding-top: 25px; text-align: center;">
+                                                        <div style="font-size: 12px; color: #666; text-transform: uppercase;">Authorized Signature</div>
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                    </td>
+
+                                    <!-- Totals Section -->
+                                    <td width="40%" style="vertical-align: top;">
+                                        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background: #f8f9fa; border-radius: 6px;">
+                                            <tr>
+                                                <td style="padding: 15px;">
+                                                    <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                                                        <tr>
+                                                            <td style="padding: 8px 0; font-size: 13px; color: #666;">Subtotal:</td>
+                                                            <td style="padding: 8px 0; font-size: 13px; text-align: right;">{{ po_details.currency_symbol }}{{ totals.subtotal }}</td>
+                                                        </tr>
+                                                        {% if totals.tax_total %}
+                                                        <tr>
+                                                            <td style="padding: 8px 0; font-size: 13px; color: #666;">Tax:</td>
+                                                            <td style="padding: 8px 0; font-size: 13px; text-align: right;">{{ po_details.currency_symbol }}{{ totals.tax_total }}</td>
+                                                        </tr>
+                                                        {% endif %}
+                                                        <tr>
+                                                            <td colspan="2" style="border-top: 1px solid #e1e1e1; margin: 8px 0;"></td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="padding: 8px 0; font-size: 16px; font-weight: 600; color: #0861a3;">Total:</td>
+                                                            <td style="padding: 8px 0; font-size: 16px; font-weight: 600; text-align: right; color: #0861a3;">{{ po_details.currency_symbol }}{{ totals.total }}</td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Footer -->
+                <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top: 20px; background: #f8f9fa; border-top: 2px solid #0861a3;">
+                    <tr>
+                        <td style="padding: 15px; text-align: center; font-size: 12px; color: #666;">
+                            Thank you for your business!
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

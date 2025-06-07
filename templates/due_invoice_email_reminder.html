@@ -1,0 +1,96 @@
+{% extends "table_parent_template.html" %} {% block title %} Meeraq Coaching
+{%endblock %} {% block content %}
+<tr style="border: 0">
+  <td style="padding: 20px; background: #f8f7f8; border: 0">
+    <div align="center">
+      <table
+        border="0"
+        cellpadding="0"
+        cellspacing="0"
+        style="
+          width: 100%;
+          mso-cellspacing: 0cm;
+          background: #f8f7f8;
+          mso-yfti-tbllook: 1184;
+          mso-padding-alt: 0cm 0cm 0cm 0cm;
+        "
+        width="100%"
+      >
+        <tbody>
+          <tr
+            style="
+              mso-yfti-irow: 0;
+              mso-yfti-firstrow: yes;
+              mso-yfti-lastrow: yes;
+            "
+          >
+            <td style="padding: 15pt 15pt 15pt 15pt">
+              <p>
+                <strong
+                  ><span style="font-size: 14px"
+                    >Dear Finance Team,</span
+                  ></strong
+                >
+              </p>
+              <p>
+                We hope this email finds you well. I wanted to bring to your
+                attention the outstanding sales orders (SOs) and invoices that
+                are due for invoicing. Below is a list of SOs and their
+                corresponding line items that have reached their due date but
+                have not yet been invoiced:
+              </p>
+              <table
+                border="1"
+                cellpadding="5"
+                cellspacing="0"
+                style="border-collapse: collapse; width: 100%"
+              >
+                <thead>
+                  <tr>
+                    <th colspan="5">Sales Orders which are due:</th>
+                  </tr>
+                  <tr>
+                    <th>Client Name</th>
+                    <th>Sales Order Number</th>
+                    <th>Line Item Description</th>
+                    <th>Due Date</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for line_item in line_item_data %}
+                  <tr>
+                    <td>{{ line_item.client_name }}</td>
+                    <td>{{ line_item.sales_order_number }}</td>
+                    <td>{{ line_item.line_item_description }}</td>
+                    <td>{{ line_item.due_date }}</td>
+                    <td align="right" nowrap>₹{{ line_item.amount }}</td>
+                  </tr>
+                  {% endfor %}
+                  <tr>
+                    <td colspan="4" align="right"><strong>Total:</strong></td>
+                    <td align="right" nowrap><strong >₹{{ total_amount }}</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+              <p>
+                It's crucial that we ensure timely invoicing for these orders to
+                maintain healthy cash flow and fulfill our commitments to our
+                clients. Your prompt attention to this matter is greatly
+                appreciated.
+              </p>
+              <p>
+                If you have any questions or need further clarification on any
+                of the items listed, please don't hesitate to reach out. Thank
+                you for your cooperation in this matter.
+              </p>
+              <p><br /></p>
+              <p>Best regards</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </td>
+</tr>
+{% endblock %}

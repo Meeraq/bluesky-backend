@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: "Arial", sans-serif;
+            font-size: 12pt;
+            color: #333333;
+            background: #ffffff;
+            margin: 0;
+            padding: 0;
+        }
+
+        .border-none {
+            border: 0px;
+        }
+
+        #template {
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            margin: 30px auto;
+            background: #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #template-body {
+            padding: 20px;
+            overflow-x: auto;
+        }
+
+        .tableStyle {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 12pt;
+        }
+
+        .tableDataCenter {
+            text-align: center;
+            padding: 10px;
+        }
+
+        #header,
+        #footer {
+            height: 70px;
+        }
+
+        #item-table {
+            margin-top: 20px;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        #item-table th,
+        #item-table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        #item-table-header {
+            font-size: 14pt;
+            color: black;
+            background-color: #bdbdbd;
+        }
+
+        .item-row {
+            font-size: 12pt;
+            background-color: #ffffff;
+            color: #333333;
+        }
+
+        /* Additional styling for invoice sections */
+        #billto-section,
+        #shipto-section,
+        #source-of-supply,
+        #item-desc,
+        #total-section-label,
+        #total-section-value,
+        #notes,
+        #footer {
+            margin-top: 0;
+        }
+
+
+        #notes {
+            margin-top: 40px;
+            font-size: 12pt;
+        }
+
+        #notes label {
+            font-weight: bold;
+            color: #333333;
+        }
+
+        .total-section {
+            margin-top: 20px;
+            text-align: right;
+            font-size: 16pt;
+            font-weight: bold;
+        }
+        .total-word-section {
+            margin-top: 20px;
+            text-align: right;
+            font-size: 12pt;
+            font-style: italic;
+        }
+
+        .btn-primary {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background-color: #0056b3;
+        }
+
+        .header-title {
+            font-size: 24pt;
+            color: #333333;
+        }
+
+        .header-subtitle {
+            font-size: 16pt;
+            color: #666666;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="template">
+        <div id="template-body">
+            <table style="width: 100%; table-layout: fixed; border: 0px; padding: 0; margin: 0;">
+                <tbody>
+                    <tr>
+                        <td style="vertical-align: top; width: 50%;font-size: 13pt">
+                            <div class="">
+                                <div class="header-title"><b>{{ organization_name }}</b></div>
+                                <div class="header-subtitle">
+                                    <div>{{ organization_billing_address }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="width: 50%; text-align: right; vertical-align: top; font-size: 13pt">
+                            <div class="header-title">INVOICE</div><br />
+                            <div class="header-subtitle">Original For Recipient</div>
+                            <div class="header-subtitle">Invoice No.: <b>{{ invoice_number }}</b></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <table style="clear: both; width: 100%; margin-top: 40px; table-layout: fixed; border: 0px;">
+                <tbody>
+                    <tr>
+                        <td style="width: 60%; vertical-align: bottom; word-wrap: break-word;">
+                            <div id="billto-section">
+                                <div style="font-size: 16pt; color: #333333;">Invoice to:</div>
+                                <div style="font-size: 14pt;">
+                                    <div id="customer-name"><b>{{ customer_name }}</b></div>
+                                    <div>{{ customer_address }}</div>
+                                    <div>{{ customer_email }}</div>
+                                    <div>{{ customer_phone }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td valign="right" style="vertical-align: bottom; width: 40%;">
+                            <table style="float: right; width: 100%; table-layout: fixed; word-wrap: break-word;">
+                                <tbody>
+                                    <tr>
+                                        <td style="text-align: right; font-size: 13pt;">
+                                            <span>Invoice Date:</span>
+                                            <span id="entity-date" style="font-size: 16px;">
+                                                {{ invoice_date }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="text-align: right; font-size: 13pt">
+                                            <span>Due Date:</span>
+                                            <span style="white-space: nowrap; font-size: 16px;" id="due-date">
+                                                {{ due_date }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <table id="item-table" border="1" cellspacing="0" cellpadding="0" class="tableStyle">
+                <thead>
+                    <tr id="item-table-header">
+                        <th class="tableDataCenter">S. No.</th>
+                        <th class="tableDataCenter">Item</th>
+                        <th class="tableDataCenter">Qty</th>
+                        <th class="tableDataCenter">Rate</th>
+                        <th class="tableDataCenter">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in line_items %}
+                    <tr class="item-row">
+                        <td class="tableDataCenter">{{ forloop.counter }}</td>
+                        <td style="word-break: break-all;" class="tableDataCenter">{{ item.name|default:"Item" }}</td>
+                        <td class="tableDataCenter">{{ item.quantity }}</td>
+                        <td class="tableDataCenter">
+                            {% if currency_symbol %}
+                            {{ currency_symbol }}{{ item.rate }}
+                            {% else %}
+                            {{ item.rate }}
+                            {% endif %}
+                        </td>
+                        <td class="tableDataCenter">
+                            {% if currency_symbol %}
+                            {{ currency_symbol }}{{ item.quantity_mul_rate }}
+                            {% else %}
+                            {{ item.quantity_mul_rate }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="total-section">
+                Total: 
+                {% if currency_symbol %}
+                {{ currency_symbol }}{{ total }}
+                {% else %}
+                {{ total }}
+                {% endif %}
+
+               
+            </div>
+              <div class="total-word-section">
+                Total In Words: <span style="font-weight: bold;">{{amount_to_words}}</span>
+            </div>
+
+            <div id="notes">
+                <label>Notes</label>
+                <p>{{ customer_notes|default:'No notes added.' }}</p>
+            </div>
+
+            {% if has_bank_details %}
+            <div style="margin-top: 40px;">
+                <label style="font-size: 16pt;">Bank Details</label>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 5px; font-size: 12pt;">
+                    <tbody>
+                        {% for key, value in bank_detail.items %}
+                        {% if value %}
+                        <tr>
+                            <td style="padding: 10px; font-weight: bold; text-align: left; width: 30%;">{{ key }}:</td>
+                            <td style="padding: 10px; text-align: left; width: 70%;">{{ value }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+                <div style="margin-top: 50px; color:#808080">
+                  This is computer generated invoice and needs no signature
+                <div>
+          
+        </div>
+    </div>
+</body>
+
+</html>

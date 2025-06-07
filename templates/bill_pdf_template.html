@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body style="font-family: 'Segoe UI', Arial, sans-serif; font-size: 9pt; color: #333333; margin: 0; padding: 0; -webkit-print-color-adjust: exact;">
+    <div style="padding: 15px; background: white; min-height: 29.7cm; position: relative;">
+        <!-- Header Banner -->
+        <div style="background: #0861a3; padding: 20px; color: white; margin: -15px -15px 20px -15px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                    <td width="60%" style="vertical-align: middle;">
+                        <table cellpadding="0" cellspacing="0" border="0" style="background: white; padding: 12px; border-radius: 6px;">
+                            <tr>
+                                <td style="vertical-align: middle;">
+                                    <img src="{{ logo_path }}" alt="Meeraq Logo" style="width: 150px; height: auto;"/>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                    <td width="40%" style="text-align: right; vertical-align: middle;">
+                        <div style="font-size: 24pt; font-weight: 600; margin-bottom: 5px;">BILL</div>
+                        <div style="font-size: 14pt;">Bill# {{ bill.bill_number }}</div>
+                        
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Company & Bill Info Section -->
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom: 20px;">
+            <tr>
+                <td width="60%" style="vertical-align: top;">
+                    <div style="font-size: 16pt; font-weight: 600; color: #0861a3; margin-bottom: 5px;">
+                        {{ company_info.name }}
+                    </div>
+                    <div style="font-size: 10pt; line-height: 1.5; color: #666;">
+                        {{ company_info.address_line }}<br>
+                     
+                    </div>
+                </td>
+                <td width="40%" style="vertical-align: top;">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: #f8f9fa; border-radius: 6px; padding: 15px;">
+                        <tr>
+                            <td style="color: #666; padding: 3px 0;">Order Number:</td>
+                            <td style="text-align: right; font-weight: 500;">{{ bill.reference_number }}</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #666; padding: 3px 0;">Bill Date:</td>
+                            <td style="text-align: right;">{{ bill.date }}</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #666; padding: 3px 0;">Due Date:</td>
+                            <td style="text-align: right;">{{ bill.due_date }}</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #666; padding: 3px 0;">Terms:</td>
+                            <td style="text-align: right;">{{ bill.payment_terms_label }}</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #666; padding: 3px 0;">Bill Received:</td>
+                            <td style="text-align: right;">{{ bill.custom_field_hash.cf_bill_recording_date }}</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #666; padding: 3px 0;">Invoice:</td>
+                            <td style="text-align: right;">{{ bill.custom_field_hash.cf_invoice }}</td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Bill From Section -->
+        <div style="margin: 20px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                    <td style="width: 50%; padding: 20px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #0861a3;">
+                        <div style="font-size: 11pt; color: #0861a3; margin-bottom: 8px; font-weight: 600;">Bill From</div>
+                        <div style="font-size: 13pt; font-weight: 600; margin-bottom: 5px;">{{ vendor.name }}</div>
+                        <div style="font-size: 10pt; color: #666; line-height: 1.5;">
+                            {% if vendor.billing_address %}
+                                {{ vendor.billing_address.address }}<br>
+                                {% if vendor.billing_address.street2 %}{{ vendor.billing_address.street2 }}<br>{% endif %}
+                                {{ vendor.billing_address.city }}<br>
+                                {{ vendor.billing_address.state }} {{ vendor.billing_address.zip }}<br>
+                                {{ vendor.billing_address.country }}<br>
+                            {% endif %}
+                            {% if vendor.email %}Email: {{ vendor.email }}<br>{% endif %}
+                            {% if vendor.phone %}Phone: {{ vendor.phone }}{% endif %}
+                        </div>
+                    </td>
+                    <td style="width: 50%;"></td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Items Table -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 20px; border-collapse: collapse; border: 1px solid #dee2e6; border-radius: 6px; overflow: hidden;">
+            <thead>
+                <tr style="background: #0861a3; color: white;">
+                    <th style="padding: 12px; text-align: left; font-weight: 500; font-size: 10pt;">#</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 500; font-size: 10pt;">Item & Description</th>
+                    <th style="padding: 12px; text-align: center; font-weight: 500; font-size: 10pt;">Qty</th>
+                    <th style="padding: 12px; text-align: right; font-weight: 500; font-size: 10pt;">Rate</th>
+                    <th style="padding: 12px; text-align: right; font-weight: 500; font-size: 10pt;">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in line_items %}
+                <tr style="{% if forloop.counter|divisibleby:2 %}background-color: #f8f9fa;{% endif %}">
+                    <td style="padding: 12px; border-bottom: 1px solid #dee2e6;">{{ forloop.counter }}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #dee2e6;">{{ item.description }}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: center;">{{ item.quantity }}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: right; font-family: 'Consolas', monospace;">{{ bill.currency_symbol }}{{ item.rate }}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #dee2e6; text-align: right; font-family: 'Consolas', monospace;">{{ bill.currency_symbol }}{{ item.item_total }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Totals Section -->
+        <div style="margin-top: 20px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td style="width: 60%; vertical-align: top;">
+                        {% if bill.notes %}
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">
+                            <div style="color: #0861a3; font-weight: 600; margin-bottom: 5px;">Notes</div>
+                            <div style="font-size: 9pt; color: #666;">{{ bill.notes }}</div>
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td style="width: 40%;">
+                        <table width="100%" cellpadding="8" cellspacing="0" style="background: #f8f9fa; border-radius: 6px;">
+                            <tr>
+                                <td style="color: #666;">Sub Total:</td>
+                                <td style="text-align: right; font-family: 'Consolas', monospace;">{{ bill.currency_symbol }}{{ bill.sub_total }}</td>
+                            </tr>
+                            {% if bill.tax_total %}
+                            <tr>
+                                <td style="color: #666;">Tax Total:</td>
+                                <td style="text-align: right; font-family: 'Consolas', monospace;">{{ bill.currency_symbol }}{{ bill.tax_total }}</td>
+                            </tr>
+                            {% endif %}
+                            <tr style="border-top: 2px solid #0861a3;">
+                                <td style="color: #0861a3; font-weight: 600; padding-top: 12px;">Total:</td>
+                                <td style="text-align: right; color: #0861a3; font-weight: 600; padding-top: 12px; font-family: 'Consolas', monospace;">{{ bill.currency_symbol }}{{ bill.total }}</td>
+                            </tr>
+                        
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Signature Section -->
+        <div style="margin-top: 40px; text-align: right;">
+            <table cellpadding="0" cellspacing="0" border="0" style="margin-left: auto;">
+                <tr>
+                    <td>
+                        <div style="width: 200px; border-top: 2px solid #0861a3; padding-top: 8px; text-align: center; font-size: 10pt; color: #666;">
+                            Authorized Signature
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

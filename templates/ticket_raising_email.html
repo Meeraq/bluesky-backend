@@ -1,0 +1,72 @@
+{% extends "table_parent_template.html" %}{% block title %}Meeraq Coaching{% endblock %} {% block content %}
+<tr style="border: 0">
+  <td style="padding: 20px; background: #f8f7f8; border: 0">
+    <div align="center">
+      <table
+        border="0"
+        cellpadding="0"
+        cellspacing="0"
+        style="
+          width: 100%;
+          mso-cellspacing: 0cm;
+          background: #f8f7f8;
+          mso-yfti-tbllook: 1184;
+          mso-padding-alt: 0cm 0cm 0cm 0cm;
+        "
+        width="100%"
+      >
+        <tbody>
+          <tr
+            style="
+              mso-yfti-irow: 0;
+              mso-yfti-firstrow: yes;
+              mso-yfti-lastrow: yes;
+            "
+          >
+            <td style="padding: 15pt 15pt 15pt 15pt">
+              <p style="text-align: left">Dear {{ heading }},</p>
+
+              <p style="text-align: left">
+                I hope this message finds you well. A new request has been
+                submitted and requires your immediate attention.
+              </p>
+              <p style="text-align: left">
+                <strong>Ticket Number:</strong> {{ ticket_number }}<br />
+              </p>
+              <p style="text-align: left">
+                <strong>Request Name:</strong> {{ ticket }}<br />
+              </p>
+              <p style="text-align: left">
+                <strong>Requested User:</strong> {{ username }}<br />
+              </p>
+              <p style="text-align: left">
+                <strong>Description:</strong> {{ description|safe }}
+              </p>
+
+              <p style="text-align: left"><strong>Date:</strong> {{ date }}</p>
+
+              <p style="text-align: left">
+                We kindly request you to review and take the necessary actions
+                as soon as possible. Please log in to the system to check the
+                details and respond accordingly.
+              </p>
+
+              <p style="text-align: left">
+                If you have any questions or need further information, feel free
+                to reach out.
+              </p>
+
+              <p style="text-align: left">
+                Thank you for your prompt attention to this matter.
+              </p>
+
+              <p style="text-align: left">Best regards,</p>
+              <p style="text-align: left">Team Meeraq.</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </td>
+</tr>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "table_parent_template.html" %}
+{% block content %}
+<tr style="border: 0">
+  <td style="padding: 20px; background: #f8f7f8; border: 0">
+    <div align="center">
+      <table
+        border="0"
+        cellpadding="0"
+        cellspacing="0"
+        style="
+          width: 100%;
+          mso-cellspacing: 0cm;
+          background: #f8f7f8;
+          mso-yfti-tbllook: 1184;
+          mso-padding-alt: 0cm 0cm 0cm 0cm;
+        "
+        width="100%"
+      >
+        <tbody>
+          <tr
+            style="
+              mso-yfti-irow: 0;
+              mso-yfti-firstrow: yes;
+              mso-yfti-lastrow: yes;
+            "
+          >
+            <td style="padding: 15pt 15pt 15pt 15pt">
+              <h2>Approval of GM Sheet for {{projectName}}</h2>
+              <p>
+                <strong>Dear {{salesName}},</strong>
+              </p>
+              <p class="child-para">
+                We trust this email finds you well. We're pleased to inform you that the GM sheet created for the project has received official approval. Below, you'll find the details you requested:
+              </p>
+              <p class="child-para">
+                <strong>GM Sheet Details:</strong><br>
+                <strong>Project Name:</strong> {{projectName}}<br>
+                <strong>Project Type:</strong> {{projectType}}<br>
+                <strong>Start Date:</strong> {{startDate}}<br>
+                <strong>Client Name:</strong> {{clientName}}<br>
+              </p>
+              <p class="child-para">
+                We appreciate your valuable input.
+              </p>
+              <p class="child-para">
+                Best regards,<br>
+                Meeraq
+              </p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </td>
+</tr>
+{% endblock %}

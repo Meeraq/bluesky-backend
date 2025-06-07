@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body style="font-family: 'Segoe UI', Arial, sans-serif; font-size: 9pt; color: #333; background: #ffffff; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+    <div style="padding: 15px; background: white; min-height: 29.7cm; position: relative;">
+        <!-- Header -->
+        <div style="background: #0861a3; padding: 15px; color: white; margin: -15px -15px 15px -15px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                    <td width="60%" style="vertical-align: top;">
+                        <div style="font-size: 16pt; font-weight: 600; margin-bottom: 5px;">{{ invoice.vendor_name }}</div>
+                        <div style="font-size: 10pt; line-height: 1.4;">
+                            {{ invoice.vendor_email }}<br>
+                            {{ invoice.vendor_phone }}<br>
+                            {{ invoice.vendor_billing_address }}
+                            {% if not invoice.is_oversea_account %}<br>
+                            <span>GSTIN:</span> {{ invoice.vendor_gst }}
+                            <span>PAN:</span> {{ invoice.vendor_pan }}
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td width="40%" style="text-align: right; vertical-align: top;">
+                        <div style="font-size: 20pt; font-weight: 600; letter-spacing: 1px; margin-bottom: 5px;">
+                            {% if invoice.is_oversea or invoice.vendor_gst == "" %}
+                            INVOICE
+                            {% else %}
+                            TAX INVOICE
+                            {% endif %}
+                        </div>
+                        <div>Original For Recipient</div>
+                        <div style="margin-top: 10px; line-height: 1.4;">
+                            <div><span>Invoice No:</span> <strong>{{ invoice.invoice_number }}</strong></div>
+                            <div><span>Date:</span> {{ invoice.invoice_date }}</div>
+                            <div><span>Due Date:</span> {{ invoice.due_date }}</div>
+                            <div><span>P.O.#:</span> {{ invoice.purchase_order_no }}</div>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Info Grid -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin: 15px 0; border-collapse: collapse;">
+            <tr>
+                <td width="60%" style="padding: 10px; vertical-align: top; background: #f8f9fa; border: 1px solid #dee2e6;">
+                    <div style="font-size: 10pt; color: #0861a3; font-weight: 600; margin-bottom: 5px;">Invoice to:</div>
+                    <div style="font-size: 11pt;">{{ invoice.customer_name }}</div>
+                    {% if invoice.customer_gst %}
+                    <div>GSTIN: {{ invoice.customer_gst }}</div>
+                    {% endif %}
+                    <div>{{ invoice.customer_address }}</div>
+                </td>
+                <td width="40%" style="padding: 10px; vertical-align: top; background: #f8f9fa; border: 1px solid #dee2e6;">
+                    <div style="font-size: 10pt; color: #0861a3; font-weight: 600; margin-bottom: 5px;">Bank Details:</div>
+                    <div>{{ invoice.beneficiary_name }}</div>
+                    <div>{{ invoice.bank_name }}</div>
+                    <div>Acc: {{ invoice.account_number }}</div>
+                    {% if invoice.is_oversea_account %}
+                    <div>TIN: {{ invoice.tin_number }}</div>
+                    {% if invoice.type_of_code == "iban" %}
+                    <div>IBAN: {{ invoice.iban }}</div>
+                    {% elif invoice.type_of_code == "swift_code" %}
+                    <div>Swift: {{ invoice.swift_code }}</div>
+                    {% endif %}
+                    {% else %}
+                    <div>IFSC: {{ invoice.ifsc_code }}</div>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+
+        <!-- Items Table -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; margin: 15px 0; font-size: 9pt;">
+            <thead>
+                <tr style="background: #0861a3; color: white;">
+                    <th style="width: 5%; padding: 8px; font-weight: 500; text-align: left; font-size: 9pt;">#</th>
+                    <th style="width: 15%; padding: 8px; font-weight: 500; text-align: left; font-size: 9pt;">Item</th>
+                    <th style="width: 20%; padding: 8px; font-weight: 500; text-align: left; font-size: 9pt;">Description</th>
+                    <th style="width: 8%; padding: 8px; font-weight: 500; text-align: left; font-size: 9pt;">Qty</th>
+                    <th style="width: 10%; padding: 8px; font-weight: 500; text-align: left; font-size: 9pt;">Rate</th>
+                    <th style="width: 10%; padding: 8px; font-weight: 500; text-align: left; font-size: 9pt;">Amount</th>
+                    {% if not invoice.is_oversea_account and invoice.is_india_entity %}
+                    <th style="width: 6%; padding: 8px; font-weight: 500; text-align: left; font-size: 9pt;">CGST</th>
+                    <th style="width: 6%; padding: 8px; font-weight: 500; text-align: left; font-size: 9pt;">SGST</th>
+                    <th style="width: 6%; padding: 8px; font-weight: 500; text-align: left; font-size: 9pt;">IGST</th>
+                    <th style="width: 8%; padding: 8px; font-weight: 500; text-align: left; font-size: 9pt;">Tax</th>
+                    {% endif %}
+                    <th style="width: 8%; padding: 8px; font-weight: 500; text-align: left; font-size: 9pt;">HSN/SAC</th>
+                    <th style="width: 12%; padding: 8px; font-weight: 500; text-align: left; font-size: 9pt;">Inc. Tax</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in invoice.line_items %}
+                <tr style="{% if forloop.counter|divisibleby:2 %}background-color: #f8f9fa;{% endif %}">
+                    <td style="padding: 6px 8px; border: 1px solid #dee2e6;">{{ forloop.counter }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #dee2e6;">{{ item.name|default:item.description|default:"Item" }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #dee2e6;">{{ item.annexure|default:"" }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #dee2e6; text-align: right; font-family: 'Consolas', monospace;">{{ item.quantity_input }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #dee2e6; text-align: right; font-family: 'Consolas', monospace;">{% if invoice.currency_symbol %}{{ invoice.currency_symbol }}{% endif %}{{ item.rate }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #dee2e6; text-align: right; font-family: 'Consolas', monospace;">{% if invoice.currency_symbol %}{{ invoice.currency_symbol }}{% endif %}{{ item.quantity_mul_rate }}</td>
+                    {% if not invoice.is_oversea_account and invoice.is_india_entity %}
+                    <td style="padding: 6px 8px; border: 1px solid #dee2e6; text-align: right; font-family: 'Consolas', monospace;">{{ item.cgst_tax }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #dee2e6; text-align: right; font-family: 'Consolas', monospace;">{{ item.sgst_tax }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #dee2e6; text-align: right; font-family: 'Consolas', monospace;">{{ item.igst_tax }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #dee2e6; text-align: right; font-family: 'Consolas', monospace;">{% if invoice.currency_symbol %}{{ invoice.currency_symbol }}{% endif %}{{ item.tax_amount }}</td>
+                    {% endif %}
+                    <td style="padding: 6px 8px; border: 1px solid #dee2e6;">{{ invoice.hsn_or_sac|default:"-" }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #dee2e6; text-align: right; font-family: 'Consolas', monospace;">{% if invoice.currency_symbol %}{{ invoice.currency_symbol }}{% endif %}{{ item.quantity_mul_rate_include_tax }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Totals and Notes -->
+        <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 15px;">
+            <tr>
+                <td style="width: 50%; vertical-align: top;">
+                    {% if invoice.customer_notes %}
+                    <div style="padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                        <div style="color: #0861a3; font-weight: 600; margin-bottom: 5px;">Notes</div>
+                        <div style="font-size: 9pt;">{{ invoice.customer_notes }}</div>
+                    </div>
+                    {% endif %}
+                </td>
+                <td style="width: 50%; text-align: right;">
+                    <div style="padding: 5px 0; font-size: 10pt;">
+                        <span style="color: #666;">Subtotal (excluding tax):</span>
+                        <span style="margin-left: 10px;">{% if invoice.currency_symbol %}{{ invoice.currency_symbol }}{% endif %}{{ invoice.sub_total_excluding_tax }}</span>
+                    </div>
+                    {% if invoice.tax_names %}
+                    <div style="font-size: 9pt; color: #666; margin: 5px 0;">
+                        {% for tax_name in invoice.tax_names %}
+                        <div>{{ tax_name }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <!-- Display adjustment if available -->
+                    {% if invoice.adjustment %}
+                    <div style="padding: 5px 0; font-size: 10pt;">
+                        <span style="color: #666;">{{ invoice.adjustment_description|default:"Adjustment" }}:</span>
+                        <span style="margin-left: 10px;">{% if invoice.currency_symbol %}{{ invoice.currency_symbol }}{% endif %}{{ invoice.adjustment }}</span>
+                    </div>
+                    {% endif %}
+                    
+                    <div style="font-size: 12pt; color: #0861a3; font-weight: 600; border-top: 2px solid #0861a3; margin-top: 5px; padding-top: 5px;">
+                        <span>Total:</span>
+                        <span style="margin-left: 10px;">{% if invoice.currency_symbol %}{{ invoice.currency_symbol }}{% endif %}{{ invoice.total }}</span>
+                    </div>
+                </td>
+            </tr>
+        </table>
+
+        <!-- Signature -->
+        <div style="text-align: right; margin-top: 15px;">
+            <span style="color: #666; font-size: 9pt;">Authorized Signature</span><br>
+            <img style="width: 120px; margin-top: 5px;" src="data:image/png;base64,{{image_base64}}" alt="signature"/>
+        </div>
+    </div>
+</body>
+</html>

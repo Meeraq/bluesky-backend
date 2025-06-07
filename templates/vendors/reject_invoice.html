@@ -1,0 +1,69 @@
+{% extends "table_parent_template.html" %} {% block title %}Meeraq | Invoice
+Rejected {% endblock %} {% block content %}
+<tr style="border: 0">
+  <td style="padding: 20px; background: #f8f7f8; border: 0">
+    <div align="center">
+      <table
+        border="0"
+        cellpadding="0"
+        cellspacing="0"
+        style="
+          width: 100%;
+          mso-cellspacing: 0cm;
+          background: #f8f7f8;
+          mso-yfti-tbllook: 1184;
+          mso-padding-alt: 0cm 0cm 0cm 0cm;
+        "
+        width="100%"
+      >
+        <tbody>
+          <tr
+            style="
+              mso-yfti-irow: 0;
+              mso-yfti-firstrow: yes;
+              mso-yfti-lastrow: yes;
+            "
+          >
+            <td style="padding: 15pt 15pt 15pt 15pt">
+              <p>
+                <strong><span style="font-size: 16px">Dear&nbsp;</span></strong
+                ><b>{{ vendor_name }}</b><strong>,</strong>
+              </p>
+              <p
+                class="child-para"
+                style="color: #333; font-size: 14px; font-weight: bold"
+              >
+                Greetings from Meeraq!!
+              </p>
+              <br />
+              <p class="child-para">
+                I hope this email finds you well. We regret to inform you that
+                your recent invoice has been rejected by our Meeraq Finance
+                team. Below is the message shared by the team:
+              </p>
+              <p class="child-para">"{{comment}}"</p>
+              <p class="child-para">
+                We kindly request you to review the feedback provided by our
+                finance team and make the necessary amendments to generate a
+                corrected invoice. Once the adjustments have been made, please
+                resend the invoice at your earliest convenience.
+              </p>
+              <p class="child-para">
+                If you have any questions or require further clarification,
+                please do not hesitate to reach out to us. We appreciate your
+                prompt attention to this matter and apologize for any
+                inconvenience caused.
+              </p>
+              <p class="child-para">Thank you for your cooperation.</p>
+              <p><br /></p>
+              <p>Best regards,</p>
+              <p>Team Meeraq.</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </td>
+</tr>
+
+{% endblock %}
