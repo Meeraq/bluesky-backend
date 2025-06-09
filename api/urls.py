@@ -262,4 +262,11 @@ urlpatterns = [
     ),
     path("gmsheet/<int:id>/offerings/add/", views.add_offerings),
     path("update-gmsheet/<int:id>/", views.update_gmsheet),
+    path(
+        "accept-gmsheet/<int:pk>/",
+        views.update_is_accepted_status,
+        name="update_is_accepted_status",
+    ),
+    path("create-benchmark/", views.create_benchmark, name="create_benchmark"),
+    path("update-benchmark/", views.update_benchmark, name="update_benchmark"),
 ]

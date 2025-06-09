@@ -76,7 +76,7 @@ from .serializers import (
     HierarchyChangeSerializer,
     HierarchyChange,
     HrAndOrganisationSerializer,
-    GmSheetSerializer
+    GmSheetSerializer,
 )
 from django.template import Template as RenderTemplate, Context as RenderContext
 
@@ -84,11 +84,15 @@ from zohoapi.serializers import (
     PurchaseOrderGetSerializer,
     ZohoVendorSerializer,
 )
-from .filters import (
-    TicketFilter,
-    GmSheetListFilter
+from .filters import TicketFilter, GmSheetListFilter
+from zohoapi.models import (
+    Vendor,
+    Benchmark,
+    SalesOrder,
+    ClientInvoice,
+    GmSheet,
+    Offering,
 )
-from zohoapi.models import Vendor,Benchmark,SalesOrder,ClientInvoice,GmSheet,Offering
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.exceptions import ObjectDoesNotExist, FieldDoesNotExist
 from django.db.models.functions import Concat, TruncDate
@@ -114,11 +118,7 @@ from api.utils.datetime import (
     get_formatted_time_with_timezone_name,
     get_formatted_date_with_timezone_name,
 )
-from api.utils.constants import (
-    ROLE_PERMISSIONS,
-    FIELD_NAME_VALUES,
-    MODELS_TO_UPDATE
-)
+from api.utils.constants import ROLE_PERMISSIONS, FIELD_NAME_VALUES, MODELS_TO_UPDATE
 from api.utils.external import (
     refresh_microsoft_access_token,
     generateManagementToken,
@@ -154,7 +154,7 @@ from .models import (
     StandardizedFieldRequest,
     UserHierarchy,
     UserDelegation,
-    DelegationHistory
+    DelegationHistory,
 )
 import jwt
 from rest_framework.pagination import PageNumberPagination
@@ -207,14 +207,14 @@ from api.utils.methods import (
     create_user_permission_for_role,
     parse_date,
     get_subordinates_of_a_user_in_role,
-    handle_offerings_update
+    handle_offerings_update,
 )
 from django.views.decorators.csrf import csrf_exempt
 from api.utils.auth import (
     get_user_data,
     get_active_roles,
     get_role_response,
-    get_user_for_active_inactive
+    get_user_for_active_inactive,
 )
 import neverbounce_sdk
 from twilio.rest import Client
@@ -228,6 +228,7 @@ wkhtmltopdf_path = os.environ.get("WKHTMLTOPDF_PATH", r"/usr/local/bin/wkhtmltop
 
 pdfkit_config = pdfkit.configuration(wkhtmltopdf=f"{wkhtmltopdf_path}")
 logger = logging.getLogger(__name__)
+
 
 @receiver(reset_password_token_created)
 def password_reset_token_created(
@@ -271,7 +272,7 @@ def password_reset_token_created(
                 return None
         else:
             link = f"{env('APP_URL')}/create-password/{reset_password_token.key}"
-     
+
         send_mail_templates(
             "forgot_password.html",
             [reset_password_token.user.email],
@@ -496,13 +497,11 @@ def edit_pmo(request):
         return Response({"error": "Failed to update pmo."}, status=500)
 
 
-
 def updateLastLogin(email):
     today = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     user = User.objects.get(username=email)
     user.last_login = today
     user.save()
-
 
 
 @api_view(["GET"])
@@ -548,9 +547,7 @@ def login_view(request):
         return Response({"error": error}, status=400)
     if user_data:
         login_timestamp = timezone.now()
-        UserLoginActivity.objects.create(
-            user=user, timestamp=login_timestamp
-        )
+        UserLoginActivity.objects.create(user=user, timestamp=login_timestamp)
         request_timezone = request.data.get("timezone")
         if request_timezone:
             update_user_timezone(user, request_timezone)
@@ -649,7 +646,7 @@ def generate_otp(request):
                 user_token_present = True
         except Exception as e:
             pass
-        
+
         send_mail_templates(
             "login_with_otp.html",
             [user],
@@ -660,7 +657,6 @@ def generate_otp(request):
                 "email": request.data["email"],
                 "microsoft_auth_url": microsoft_auth_url,
                 "user_token_present": user_token_present,
-               
             },
             [],  # no bcc
         )
@@ -723,6 +719,7 @@ def validate_otp(request):
     else:
         logout(request)
         return Response({"error": "Invalid user type"}, status=400)
+
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, IsInRoles("coach", "pmo", "learner", "hr")])
@@ -790,9 +787,7 @@ def change_user_role(request, user_id):
         )
 
     roles = get_active_roles(user)
-    response_data, response_status = get_role_response(
-        user, user_profile_role, roles
-    )
+    response_data, response_status = get_role_response(user, user_profile_role, roles)
     sub_role = ""
     if user_role:
         permission = user.profile.permissions.filter(role__name=user_role).first()
@@ -949,7 +944,7 @@ def get_api_logs(request):
     result_dict = {}
 
     for log in logs:
-        matching_key = next((key for key in log.path.split('/') if key), None)
+        matching_key = next((key for key in log.path.split("/") if key), None)
         if matching_key:
             activity = matching_key
             user_type = (
@@ -959,7 +954,7 @@ def get_api_logs(request):
                 and log.user.profile.roles.all().first()
                 else None
             )
-        
+
             key = (user_type, activity)
             result_dict[key] = result_dict.get(key, 0) + 1
 
@@ -971,7 +966,6 @@ def get_api_logs(request):
                 for key, value in result_dict.items()
                 if key[0] == user_type and key[1] == activity
             )
-       
         }
         for user_type in set(key[0] for key in result_dict)
     }
@@ -1015,6 +1009,7 @@ class UpdateUserRoles(APIView):
                 {"error": "Failed to update."},
                 status=500,
             )
+
 
 class UniqueValuesView(APIView):
     def get(self, request, *args, **kwargs):
@@ -1693,7 +1688,6 @@ class TicketFeedbackAPIView(APIView):
             )
 
 
-
 class AddCommentView(generics.CreateAPIView):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
@@ -1708,7 +1702,7 @@ class UserRolePermissionsListCreateView(generics.ListCreateAPIView):
     queryset = UserRolePermissions.objects.all()
     serializer_class = UserRolePermissionsSerializer
     permission_classes = [IsAuthenticated]
-    
+
 
 # Retrieve, Update, and Delete
 class UserRolePermissionsRetrieveUpdateDestroyView(
@@ -1785,6 +1779,7 @@ class RoleRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
     permission_classes = [IsAuthenticated]
+
 
 class UserRolePermissionsRetrieveView(generics.RetrieveAPIView):
     serializer_class = UserRolePermissionsSerializer
@@ -1871,7 +1866,6 @@ SERIALIZER_MAPPING = {
 }
 
 
-
 class GetTeamOfManager(generics.ListAPIView):
     """
     API View to retrieve team members excluding the manager with custom pagination.
@@ -1951,7 +1945,6 @@ class GetTeamOfManager(generics.ListAPIView):
                 {"error": f"An error occurred: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
 
 
 class GetPermissionForUserRole(generics.RetrieveAPIView):
@@ -2380,7 +2373,6 @@ class StandardFieldDeleteValue(APIView):
             )
 
 
-
 @api_view(["POST"])
 @permission_classes(
     [IsAuthenticated, IsInRoles("pmo", "coach", "facilitator", "learner")]
@@ -2410,8 +2402,6 @@ def standard_field_request(request, user_id):
         return Response({"error": "Failed to create request."}, status=500)
 
 
-
-
 class ActiveDeligationOfUser(APIView):
     def get(self, request, user_id, user_type, status):
         try:
@@ -2425,9 +2415,7 @@ class ActiveDeligationOfUser(APIView):
             return Response(serializer.data)
         except Exception as e:
             print(str(e))
-            return Response(
-                {"error": str(e)}, status=500
-            )
+            return Response({"error": str(e)}, status=500)
 
 
 class ActiveDeligationOfUserDepth(APIView):
@@ -2443,9 +2431,8 @@ class ActiveDeligationOfUserDepth(APIView):
             return Response(serializer.data)
         except Exception as e:
             print(str(e))
-            return Response(
-                {"error": str(e)}, status=500
-            )
+            return Response({"error": str(e)}, status=500)
+
 
 class DeligatedToRolePermission(APIView):
     def get(self, request, employee_id):
@@ -2503,9 +2490,6 @@ class UserHierarchyOfUserRetrieveAPIView(APIView):
         )
 
 
-
-
-
 class GetEmployeeListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = EmployeeSerializer
@@ -2527,7 +2511,7 @@ class CreateEmployeeView(generics.CreateAPIView):
                     email = data.get("email", "").strip().lower()
                     phone_number = data.get("phone_number")
                     sales_id = data.get("sales_id")
-                    
+
                     if not (first_name and last_name and phone_number and email):
                         return Response(
                             {"error": "Name and phone are mandatory fields."},
@@ -2670,9 +2654,6 @@ class OfferingsByGMSheetView(generics.ListAPIView):
         return offerings
 
 
-
-
-
 class AllGmSheetView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = GmSheetDetailedSerializer
@@ -2730,7 +2711,6 @@ class AllGmSheetView(generics.ListAPIView):
                 .order_by("-created_at")
                 .distinct()
             )
-     
 
         if product_type:
             gmsheet_ids = SalesOrder.objects.filter(
@@ -2765,7 +2745,7 @@ class AllGmSheetView(generics.ListAPIView):
         elif product_type or caas_project_id or schedular_project_id:
             return GmSheetDetailedSerializer
         return super().get_serializer_class()
-    
+
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -2905,7 +2885,7 @@ class LeaderCumulativeDataView(generics.ListAPIView):
             item.get("hours", 0) * item.get("coach", 0) * item.get("price", 0)
             for item in items
         )
-    
+
 
 @api_view(["GET"])
 @permission_classes(
@@ -2919,7 +2899,6 @@ def get_all_benchmarks(request):
             return Response(serializer.data, status=200)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
-        
 
 
 class UserHierarchyListCreateView(generics.ListCreateAPIView):
@@ -3339,7 +3318,6 @@ class OrganizationStructureAPIView(APIView):
         return structure
 
 
-
 @api_view(["GET"])
 def get_employees(request):
     try:
@@ -3453,7 +3431,6 @@ def create_employee(request):
         )
 
 
-
 class HrAndOrganisationView(generics.ListAPIView):
     permission_classes = [
         IsAuthenticated,
@@ -3490,7 +3467,6 @@ class HrAndOrganisationView(generics.ListAPIView):
         data_source = list(hr_with_org) + list(organisations_without_hr)
 
         return data_source
-
 
 
 @api_view(["POST"])
@@ -3605,7 +3581,129 @@ def update_gmsheet(request, id):
             {"error": "Failed to update data"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
-    
 
 
+@api_view(["PUT"])
+def update_is_accepted_status(request, pk):
+    try:
+        gm_sheet = GmSheet.objects.get(pk=pk)
+    except GmSheet.DoesNotExist:
+        return Response(
+            {"error": "GmSheet not found"}, status=status.HTTP_404_NOT_FOUND
+        )
+    data = {}
+    # Check if is_accepted is present in request data
+    if "is_accepted" in request.data:
+        data["is_accepted"] = request.data.get("is_accepted")
+        # Call send_mail_templates if is_accepted is True
+        if data["is_accepted"]:
+            template_name = "gm_sheet_approved.html"
+            subject = "GM Sheet approved"
+            context_data = {
+                "projectName": gm_sheet.project_name,
+                "clientName": gm_sheet.client_name,
+                "startdate": gm_sheet.start_date,
+                "projectType": gm_sheet.project_type,
+                "salesName": gm_sheet.sales.name,
+            }
+            bcc_list = []  # No BCC
+            send_mail_templates(
+                template_name,
+                (
+                    [gm_sheet.sales.email]
+                    if env("ENVIRONMENT") == "PRODUCTION"
+                    else ["naveen@meeraq.com"]
+                ),
+                subject,
+                context_data,
+                bcc_list,
+            )
 
+    # Check if deal_status is present in request data
+    if "deal_status" in request.data:
+        data["deal_status"] = request.data.get("deal_status")
+        all_offerings = Offering.objects.filter(gm_sheet=gm_sheet)
+        all_offerings.update(is_won=False)
+        if data["deal_status"].lower() == "won":
+            offering_id = request.data.get("offering_id")
+            if not offering_id:
+                return Response(
+                    {"error": "Offering ID not provided"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                offering = Offering.objects.get(pk=offering_id)
+                offering.is_won = True
+                offering.save()
+            except Offering.DoesNotExist:
+                return Response(
+                    {"error": "Offering not found"}, status=status.HTTP_404_NOT_FOUND
+                )
+
+    gm_sheet_serializer = GmSheetSerializer(gm_sheet, data=data, partial=True)
+    if gm_sheet_serializer.is_valid():
+        gm_sheet_serializer.save()
+        return Response(gm_sheet_serializer.data, status=status.HTTP_200_OK)
+    return Response(gm_sheet_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+def create_benchmark(request):
+    year = request.data.get("year")
+    if not year:
+        return Response(
+            {"error": "Year is required"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Fetch all existing benchmarks
+    existing_benchmarks = Benchmark.objects.all()
+
+    # Gather project_type keys from existing benchmarks
+    project_type_keys = set()
+    for benchmark in existing_benchmarks:
+        project_type_keys.update(benchmark.project_type.keys())
+
+    # Create new project_type with keys and empty string values
+    project_type = {key: "" for key in project_type_keys}
+
+    data = {
+        "year": year,
+        "project_type": project_type,
+    }
+
+    serializer = BenchmarkSerializer(data=data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["PUT"])
+def update_benchmark(request):
+    year = request.data.get("year", None)  # Extract year from request data
+    benchmark_data = request.data.get(
+        "benchmark", None
+    )  # Extract benchmark data from request data
+
+    if year is None:
+        return Response(
+            {"error": "Year is required in the payload"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        benchmark = Benchmark.objects.get(year=year)
+    except Benchmark.DoesNotExist:
+        return Response(
+            {"error": f"Benchmark for year {year} does not exist"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    if request.method == "PUT":
+        serializer = BenchmarkSerializer(
+            benchmark, data={"project_type": benchmark_data}, partial=True
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
