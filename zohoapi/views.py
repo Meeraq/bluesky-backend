@@ -1,5 +1,9 @@
 from rest_framework.decorators import api_view, permission_classes
 import requests
+import random
+import string
+import uuid
+from babel.numbers import get_currency_symbol
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from rest_framework.exceptions import ValidationError
@@ -16,14 +20,10 @@ import pandas as pd
 from django.db.models import Sum, Max
 from django.db.models.functions import Coalesce
 from api.utils.methods import get_subordinates_of_a_user_in_role
-from api.models import (
-    Role,
-    Sales,
-    
-)
+from api.models import Role, Sales, Profile
 from num2words import num2words
 from datetime import timedelta
-from api.serializers import get_exchange_rate,GmSheetSerializer
+from api.serializers import get_exchange_rate, GmSheetSerializer
 from openpyxl import Workbook
 import json
 from rest_framework.views import APIView
@@ -83,17 +83,12 @@ from zohoapi.utils.methods import (
     get_current_month_start_and_end_date,
     generate_new_invoice_number,
     generate_new_so_number,
-  get_current_financial_year_dates,
+    get_current_financial_year_dates,
     create_payload_data,
- 
     get_revenue_data,
-
     calculate_financials_from_orders,
-
     get_meeraq_sales_orders,
-   
     zoho_api_request,
-
     create_purchase_order,
     calculate_total_revenue,
     calculate_total_cost,
@@ -108,7 +103,7 @@ from zohoapi.utils.methods import (
     create_custom_field_data,
     create_singapore_purchase_order,
     filter_invoice_data,
-    map_bill_to_invoice
+    map_bill_to_invoice,
 )
 from zohoapi.utils.common import (
     get_financial_year,
@@ -143,7 +138,7 @@ from .models import (
     CreditNote,
     PurchaseOrderLineItem,
     GmSheet,
-    HandoverDetails
+    HandoverDetails,
 )
 import base64
 from io import BytesIO
@@ -182,9 +177,6 @@ wkhtmltopdf_path = os.environ.get(
 pdfkit_config = pdfkit.configuration(wkhtmltopdf=f"{wkhtmltopdf_path}")
 
 
-
-
-
 def get_paid_so_item_ids(sales_order):
     ci_line_items = ClientInvoiceLineItem.objects.filter(
         clientinvoice__isnull=False,
@@ -209,7 +201,6 @@ def get_paid_so_item_ids(sales_order):
             completely_paid_line_item_ids.append(key)
 
     return completely_paid_line_item_ids
-
 
 
 @api_view(["GET"])
@@ -343,7 +334,7 @@ def get_purchase_order_data_util(purchaseorder_id):
         ).first()
         if not purchase_order_data:
             return None, status.HTTP_404_NOT_FOUND, "Purchase order not found"
-        
+
         print("step 2")
         # For non-India entity
         serializer = PurchaseOrderSerializer(purchase_order_data)
@@ -385,7 +376,6 @@ def get_purchase_order_data(request, purchaseorder_id):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
 @api_view(["POST"])
 @permission_classes([IsAuthenticated, IsInRoles("vendor")])
 def add_invoice_data(request):
@@ -401,12 +391,13 @@ def add_invoice_data(request):
                 invoice_date__range=(f"{start_year}-04-01", f"{end_year}-03-31"),
             )
             hsn_or_sac = request.data.get("hsn_or_sac", None)
+            vendor = Vendor.objects.get(vendor_id=request.data["vendor_id"])
             if hsn_or_sac:
                 try:
                     print(
                         f"Updating vendor HSN/SAC for vendor_id: {request.data['vendor_id']}"
                     )
-                    vendor = Vendor.objects.get(vendor_id=request.data["vendor_id"])
+
                     vendor.hsn_or_sac = hsn_or_sac
                     vendor.save()
                     print("Vendor HSN/SAC updated successfully")
@@ -420,37 +411,46 @@ def add_invoice_data(request):
                 )
 
             print("Fetching vendor details")
-            vendor = Vendor.objects.get(vendor_id=request.data["vendor_id"])
 
             print("Validating serializer data")
             serializer = InvoiceDataSerializer(data=request.data)
+            vendor_details = vendor.zoho_vendor
             if serializer.is_valid():
                 print("Serializer is valid, saving invoice")
                 invoice_instance = serializer.save()
 
                 print("Getting vendor details")
-                vendor_details = ZohoVendor.objects.get(request.data["vendor_id"])
-                invoice_instance.vendor_name = vendor_details["contact_name"]
+
+                invoice_instance.vendor_name = vendor_details.contact_name
                 # updating exchange rate and the purchase order reference
                 if invoice_instance.purchase_order_id:
-                    print(f"Fetching purchase order for ID: {invoice_instance.purchase_order_id}")
+                    print(
+                        f"Fetching purchase order for ID: {invoice_instance.purchase_order_id}"
+                    )
                     try:
                         purchase_order = PurchaseOrder.objects.get(
                             purchaseorder_id=invoice_instance.purchase_order_id
                         )
                         # Set the purchase order reference
-                        invoice_instance.purchase_order_reference = purchase_order                        
+                        invoice_instance.purchase_order_reference = purchase_order
                         # Set the exchange rate if available
-                        if hasattr(purchase_order, 'exchange_rate') and purchase_order.exchange_rate:
-                            invoice_instance.exchange_rate = purchase_order.exchange_rate
+                        if (
+                            hasattr(purchase_order, "exchange_rate")
+                            and purchase_order.exchange_rate
+                        ):
+                            invoice_instance.exchange_rate = (
+                                purchase_order.exchange_rate
+                            )
                             print(f"Exchange rate set: {purchase_order.exchange_rate}")
                     except PurchaseOrder.DoesNotExist:
-                        print(f"Purchase order not found for ID: {invoice_instance.purchase_order_id}")
+                        print(
+                            f"Purchase order not found for ID: {invoice_instance.purchase_order_id}"
+                        )
                     except Exception as e:
                         print(f"Error linking purchase order: {str(e)}")
                 invoice_instance.save()
                 print(
-                    f"Updated invoice with vendor name: {vendor_details['contact_name']}"
+                    f"Updated invoice with vendor name: {vendor_details.contact_name}"
                 )
 
                 approver_email = serializer.data["approver_email"]
@@ -467,33 +467,15 @@ def add_invoice_data(request):
                     if env("ENVIRONMENT") == "PRODUCTION"
                     else "tech@meeraq.com"
                 )
-                print(f"Email will be sent to: {email_recipient}")
-                zoho_vendor = ZohoVendor.objects.get(
-                    contact_id=request.data["vendor_id"]
-                )
-                is_singapore_entity = check_singapore_entity(zoho_vendor)
-                is_ctt_po = (
-                    invoice_instance.purchase_order_no
-                    and invoice_instance.purchase_order_no.startswith("CTT")
-                )
-                bcc_emails = json.loads(env("CTT_PMO_EMAILS")) if is_ctt_po else []
 
-                if is_singapore_entity:
-                    send_mail_templates(
-                        "vendors/add_invoice_sg.html",
-                        [email_recipient],
-                        f"[SG Entity] Action Needed: Approval Required for Invoice - {invoice_data['vendor_name']} -> {invoice_data['invoice_number']}",
-                        {**invoice_data, "link": env("CAAS_APP_URL")},
-                        bcc_emails,
-                    )
-                else:
-                    send_mail_templates(
-                        "vendors/add_invoice.html",
-                        [email_recipient],
-                        f"Action Needed: Approval Required for Invoice - {invoice_data['vendor_name']} -> {invoice_data['invoice_number']}",
-                        {**invoice_data, "link": env("CAAS_APP_URL")},
-                        bcc_emails,
-                    )
+                send_mail_templates(
+                    "vendors/add_invoice_sg.html",
+                    [email_recipient],
+                    f"{vendor_details.entity.country} Action Needed: Approval Required for Invoice - {invoice_data['vendor_name']} -> {invoice_data['invoice_number']}",
+                    {**invoice_data, "link": env("CAAS_APP_URL")},
+                    [],
+                )
+
                 print("Email sent successfully")
 
                 return Response(
@@ -532,40 +514,20 @@ def edit_invoice(request, invoice_id):
         hsn_or_sac = vendor.hsn_or_sac
         invoice_data = get_invoice_data_for_pdf(invoice_data_serialized, hsn_or_sac)
         # invoice_data = get_invoice_data_for_pdf(InvoiceDataSerializer(invoice).data, vendor.hsn_or_sac)
-        zoho_vendor = ZohoVendor.objects.get(contact_id=request.data["vendor_id"])
-        is_singapore_entity = check_singapore_entity(zoho_vendor)
-        is_ctt_po = invoice.purchase_order_no and invoice.purchase_order_no.startswith(
-            "CTT"
+
+        send_mail_templates(
+            "vendors/edit_invoice.html",
+            [
+                (
+                    approver_email
+                    if env("ENVIRONMENT") == "PRODUCTION"
+                    else "tech@meeraq.com"
+                )
+            ],
+            f"Action Needed: Re-Approval Required for Invoice - {invoice_data['vendor_name']}  + {invoice_data['invoice_number']}",
+            {**invoice_data, "link": env("CAAS_APP_URL")},
+            [],
         )
-        bcc_emails = json.loads(env("CTT_PMO_EMAILS")) if is_ctt_po else []
-        if is_singapore_entity:
-            send_mail_templates(
-                "vendors/edit_invoice.html",
-                [
-                    (
-                        approver_email
-                        if env("ENVIRONMENT") == "PRODUCTION"
-                        else "tech@meeraq.com"
-                    )
-                ],
-                f"[SG Entity] Action Needed: Re-Approval Required for Invoice - {invoice_data['vendor_name']}  + {invoice_data['invoice_number']}",
-                {**invoice_data, "link": env("CAAS_APP_URL")},
-                bcc_emails,
-            )
-        else:
-            send_mail_templates(
-                "vendors/edit_invoice.html",
-                [
-                    (
-                        approver_email
-                        if env("ENVIRONMENT") == "PRODUCTION"
-                        else "tech@meeraq.com"
-                    )
-                ],
-                f"Action Needed: Re-Approval Required for Invoice - {invoice_data['vendor_name']}  + {invoice_data['invoice_number']}",
-                {**invoice_data, "link": env("CAAS_APP_URL")},
-                bcc_emails,
-            )
         return Response({"message": "Invoice edited successfully."}, status=201)
     else:
         return Response({"error": "Invalid data."}, status=400)
@@ -597,10 +559,7 @@ def get_purchase_order_and_invoices(request, purchase_order_id):
                 {"error": "Purchase order not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
-       
-        purchase_orders_serializer = PurchaseOrderSerializer(
-            purchase_order_data
-        ).data
+        purchase_orders_serializer = PurchaseOrderSerializer(purchase_order_data).data
         invoices = InvoiceData.objects.filter(purchase_order_id=purchase_order_id)
         invoice_serializer = InvoiceDataSerializer(invoices, many=True)
 
@@ -617,29 +576,6 @@ def get_purchase_order_and_invoices(request, purchase_order_id):
             {"error": "Failed to fetch purchase order data"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated, IsInRoles("vendor", "pmo", "finance")])
-def get_bank_account_data(
-    request,
-    vendor_id,
-    bank_account_id,
-):
-    access_token = get_access_token(env("ZOHO_REFRESH_TOKEN"))
-
-    if access_token:
-        headers = {"Authorization": f"Bearer {access_token}"}
-        url = f"{base_url}/contacts/{vendor_id}/bankaccount/editpage?account_id={bank_account_id}&organization_id={env('ZOHO_ORGANIZATION_ID')}"
-        bank_response = requests.get(
-            url,
-            headers=headers,
-        )
-        if bank_response.json()["message"] == "success":
-            return Response(bank_response.json(), status=200)
-        return Response({}, status=400)
-    else:
-        return Response({}, status=400)
 
 
 @api_view(["GET"])
@@ -973,7 +909,7 @@ def add_vendor(request):
 @permission_classes([IsAuthenticated, IsInRoles("pmo", "finance", "superadmin")])
 def get_all_vendors(request):
     try:
-        vendors = Vendor.objects.all()
+        vendors = Vendor.objects.all().order_by("-created_at")
         serializer = VendorSerializer(vendors, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -1073,7 +1009,7 @@ def get_all_invoices(request):
 def get_invoice(request, invoice_id):
     try:
         # Get the invoice with related bill in a single query
-        invoice = InvoiceData.objects.select_related('bill').get(id=invoice_id)
+        invoice = InvoiceData.objects.select_related("bill").get(id=invoice_id)
         # Use the updated serializer that includes the bill relationship
         invoice_serializer = InvoiceDataSerializer(invoice)
         # Return the serialized data which already includes the bill information
@@ -1314,9 +1250,6 @@ def update_invoice_status(request, invoice_id):
         invoice_data = get_invoice_data_for_pdf(
             InvoiceDataSerializer(invoice).data, vendor.hsn_or_sac
         )
-        zoho_vendor = ZohoVendor.objects.get(contact_id=invoice.vendor_id)
-        is_singapore_entity = check_singapore_entity(zoho_vendor)
-        print("Step 1")
         if new_status == "approved":
             email_body_message = render_to_string(
                 "vendors/approve_invoice.html",
@@ -1325,11 +1258,7 @@ def update_invoice_status(request, invoice_id):
                     "comment": comment,
                     "approved_by": request.user.username,
                     "entity_info": {
-                        (
-                            "This payment will be processed through Inumuto Consulting Pte Ltd (Singapore branch)"
-                            if is_singapore_entity
-                            else "This payment will be processed through Inumuto Consulting Pvt Ltd (India branch)"
-                        )
+                        f"This payment will be processed through {vendor.zoho_vendor.entity.name} ({vendor.zoho_vendor.entity.country} entity)"
                     },
                 },
             )
@@ -1337,7 +1266,7 @@ def update_invoice_status(request, invoice_id):
             send_mail_templates_with_attachment(
                 "invoice_pdf.html",
                 json.loads(env("FINANCE_EMAIL")),
-                f"{ '[SG Entity]' if is_singapore_entity else '' } Meeraq | Invoice Approved - {invoice_data['purchase_order_no']} -> {invoice_data['vendor_name']} ",
+                f"{ vendor.zoho_vendor.entity.country} Meeraq | Invoice Approved - {invoice_data['purchase_order_no']} -> {invoice_data['vendor_name']} ",
                 {"invoice": invoice_data},
                 email_body_message,
                 [env("BCC_EMAIL")],
@@ -1387,12 +1316,12 @@ def get_vendor_details_from_zoho(request, vendor_id):
         user = vendor.user.user
         user_data = get_user_data(user)
         if user_data:
-            organization = get_organization_data()
-            zoho_vendor = get_vendor(user_data["vendor_id"])
+
             res = {
                 "vendor": user_data,
-                "organization": organization,
-                "zoho_vendor": zoho_vendor,
+                "zoho_vendor": ZohoVendorSerializer(
+                    ZohoVendor.objects.get(contact_id=vendor_id)
+                ).data,
             }
             return Response(res)
     except Exception as e:
@@ -1400,40 +1329,26 @@ def get_vendor_details_from_zoho(request, vendor_id):
         return Response({"error": "Failed to get data."}, status=500)
 
 
-
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, IsInRoles("pmo", "finance")])
-def get_po_number_to_create(request, po_type):
+def get_po_number_to_create(request):
     try:
         entity = request.query_params.get("entity")
         project_type = request.query_params.get("project_type")
         purchase_orders = PurchaseOrderGetSerializer(
-            PurchaseOrder.objects.filter(
-                Q(created_time__year__gte=2024)
-                | Q(purchaseorder_number__in=purchase_orders_allowed)
-            ),
+            PurchaseOrder.objects.all(),
             many=True,
         ).data
         production = True if env("ENVIRONMENT") == "PRODUCTION" else False
         current_financial_year = get_current_financial_year()
 
-        is_india_entity = True if not entity == "sgd" else False
+        entity = Entity.objects.filter(id=entity).first()
 
-        if po_type == "meeraq":
-            regex_to_match = f"Meeraq/PO{ '' if is_india_entity else '/S'}/{current_financial_year}/{'SST'if project_type == 'skill' else 'CH'}/{ '' if production else 'Testing/'}"
-            new_po_number = generate_new_po_number(
-                purchase_orders, regex_to_match, production, is_india_entity
-            )
-        elif po_type == "others":
-            regex_to_match = f"Meeraq/PO{ '' if is_india_entity else '/S'}/{current_financial_year}/OTH/{ '' if production else 'Testing/'}"
-            new_po_number = generate_new_po_number(
-                purchase_orders, regex_to_match, production, is_india_entity
-            )
-        elif po_type == "ctt":
-            regex_to_match = f"CTT/PO{ '' if is_india_entity else '/S'}/{current_financial_year}/{ '' if production else 'Testing/'}"
-            new_po_number = generate_new_ctt_po_number(
-                purchase_orders, regex_to_match, production, is_india_entity
-            )
+        regex_to_match = f"BSC/PO/{entity.suffix}/{current_financial_year}/{ '' if production else 'Testing/'}"
+        new_po_number = generate_new_po_number(
+            purchase_orders, regex_to_match, production
+        )
+
         return Response({"new_po_number": new_po_number})
     except Exception as e:
         print(str(e))
@@ -1456,7 +1371,7 @@ def get_client_invoice_number_to_create(request):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, IsInRoles("pmo", "finance", "sales")])
-def get_so_number_to_create(request, brand):
+def get_so_number_to_create(request):
     try:
         sales_orders = SalesOrderGetSerializer(SalesOrder.objects.all(), many=True).data
         current_financial_year = get_current_financial_year()
@@ -1467,28 +1382,14 @@ def get_so_number_to_create(request, brand):
         entity_id = request.query_params.get("entity")
         entity = Entity.objects.filter(id=entity_id).first()
 
-        # Determine if the entity is India
-        is_india_entity = entity and entity.id == int(env("INDIA_ENTITY_ID"))
-        suffix = "" if is_india_entity else "/S"
-
-    
-        project_type = request.query_params.get("project_type")
-        if project_type == "caas":
-            regex_to_match = f"Meeraq{suffix}/{current_financial_year}/CH/{'' if production else 'Testing/'}"
-        elif project_type == "skill_training":
-            regex_to_match = f"Meeraq{suffix}/{current_financial_year}/SST/{'' if production else 'Testing/'}"
-        elif project_type == "assessment":
-            regex_to_match = f"Meeraq{suffix}/{current_financial_year}/ASMT/{'' if production else 'Testing/'}"
-        else:
-            return Response(
-                {"error": "Select project type to generate the SO number"},
-                status=400,
-            )
-        
+        suffix = entity.suffix
+        regex_to_match = (
+            f"BSC/{suffix}/{current_financial_year}/{'' if production else 'Testing/'}"
+        )
 
         # Generate the new SO number
         new_so_number = generate_new_so_number(
-            sales_orders, regex_to_match, production, is_india_entity
+            sales_orders, regex_to_match, production, entity
         )
         return Response({"new_so_number": new_so_number})
     except Exception as e:
@@ -1550,29 +1451,11 @@ def update_purchase_order_status(request, purchase_order_id, status):
         if not purchase_order_data:
             return None, status.HTTP_404_NOT_FOUND, "Purchase order not found"
 
-        is_singapore_entity = check_singapore_entity(purchase_order_data.zoho_vendor)
-
-        if not is_singapore_entity:
-            access_token = get_access_token(env("ZOHO_REFRESH_TOKEN"))
-            if not access_token:
-                raise Exception(
-                    "Access token not found. Please generate an access token first."
-                )
-            api_url = f"{base_url}/purchaseorders/{purchase_order_id}/status/{status}?organization_id={organization_id}"
-            auth_header = {"Authorization": f"Bearer {access_token}"}
-            response = requests.post(api_url, headers=auth_header)
-            print(response.json())
-            if response.status_code == 200:
-                create_or_update_po(purchase_order_id)
-                return Response({"message": f"Purchase Order changed to {status}."})
-            else:
-                return Response(status=401)
-        else:
-            purchase_order_data.status = status
-            purchase_order_data.order_status = status
-            purchase_order_data.current_sub_status = status
-            purchase_order_data.save()
-            return Response({"message": f"Purchase Order changed to {status}."})
+        purchase_order_data.status = status
+        purchase_order_data.order_status = status
+        purchase_order_data.current_sub_status = status
+        purchase_order_data.save()
+        return Response({"message": f"Purchase Order changed to {status}."})
     except Exception as e:
         print(str(e))
         return Response(status=404)
@@ -1583,29 +1466,21 @@ def update_purchase_order_status(request, purchase_order_id, status):
 def create_purchase_order_for_outside_vendors(request):
     try:
         entity = None
-        
-        entity = (
-                Entity.objects.all().exclude(id=request.data.get("entity")).first()
-            )
+
+        entity = Entity.objects.get(id=request.data.get("entity"))
 
         JSONString = json.loads(request.data.get("JSONString"))
-        
+
         success = create_singapore_purchase_order(request, JSONString, entity)
         if success:
             return Response({"message": "Purchase Order created successfully."})
 
         else:
-            return Response(
-                {"error": "Failed to create purchase order."}, status=500
-            )
+            return Response({"error": "Failed to create purchase order."}, status=500)
 
     except Exception as e:
         print(str(e))
         return Response(status=500)
-
-
-
-
 
 
 @api_view(["GET"])
@@ -1650,9 +1525,6 @@ def get_individual_vendor_data(request, vendor_id):
 def get_invoices_for_vendor(request, vendor_id, purchase_order_id):
     invoice_res, http_status = fetch_and_process_invoices(vendor_id, purchase_order_id)
     return Response(invoice_res, status=http_status)
-
-
-
 
 
 @api_view(["GET"])
@@ -1819,8 +1691,6 @@ def get_ctt_purchase_orders_lxp(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
-
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_ctt_invoices(request):
@@ -1836,32 +1706,6 @@ def get_ctt_invoices(request):
     except Exception as e:
         print(str(e))
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def get_sales_order_data_pdf(request, salesorder_id):
-    access_token = get_access_token(env("ZOHO_REFRESH_TOKEN"))
-    if access_token:
-        api_url = f"{base_url}/salesorders/{salesorder_id}?print=true&accept=pdf&organization_id={organization_id}"
-        auth_header = {"Authorization": f"Bearer {access_token}"}
-
-        response = requests.get(api_url, headers=auth_header)
-        if response.status_code == 200:
-            pdf_content = response.content
-            response = HttpResponse(pdf_content, content_type="application/pdf")
-            response["Content-Disposition"] = f'attachment; filename="sales_order.pdf"'
-            return response
-        else:
-            return Response(
-                {"error": "Failed to fetch sales order data"},
-                status=response.status_code,
-            )
-    else:
-        return Response(
-            {"error": "Access token not found. Please generate an access token first."},
-            status=status.HTTP_401_UNAUTHORIZED,
-        )
 
 
 def get_sales_order_line_items(line_items):
@@ -2020,81 +1864,20 @@ def get_sales_order_data_util(salesorder_id):
         sales_order = SalesOrder.objects.filter(salesorder_id=salesorder_id).first()
         if not sales_order:
             return None, status.HTTP_404_NOT_FOUND, "Sales order not found"
+        # For non-India entity
+        serializer = SalesOrderSerializer(sales_order)
+        line_items = V2SalesOrderLineItemSerializer(
+            SalesOrderLineItem.objects.filter(salesorder=sales_order), many=True
+        ).data
+        paid_so_line_item_ids = get_paid_so_item_ids(sales_order)
 
-        # Check if it's India entity
-        is_india_entity = sales_order.entity and sales_order.entity.id == int(
-            env("INDIA_ENTITY_ID")
-        )
+        complete_data = {
+            **serializer.data,
+            "paid_so_line_item_ids": paid_so_line_item_ids,
+            "line_items": line_items,
+        }
 
-        if is_india_entity:
-            # For India entity, get access token
-            access_token = None
-            if is_india_entity:
-                access_token = get_access_token(env("ZOHO_REFRESH_TOKEN"))
-
-                if not access_token:
-                    return (
-                        None,
-                        status.HTTP_401_UNAUTHORIZED,
-                        "Access token required for India entity",
-                    )
-
-            zoho_data = get_zoho_sales_order(salesorder_id, access_token)
-            if not zoho_data:
-                return (
-                    None,
-                    status.HTTP_400_BAD_REQUEST,
-                    "Failed to fetch Zoho sales order data",
-                )
-
-            # Get additional data
-            existing_data = get_existing_sales_order_data(sales_order)
-            paid_so_line_item_ids = get_paid_so_item_ids(sales_order)
-            is_booking_amount = sales_order.so_line_items.filter(
-                is_booking_amount=True
-            ).exists()
-            
-            project_data = {}
-            if sales_order.caas_project:
-                project_data["caas_project"] = sales_order.caas_project.id
-                project_data["caas_project_name"] = sales_order.caas_project.name
-            if sales_order.schedular_project:
-                project_data["schedular_project"] = sales_order.schedular_project.id
-                project_data["schedular_project_name"] = sales_order.schedular_project.name
-
-            # Combine all data
-            complete_data = {
-                **zoho_data,
-                **existing_data,
-                **project_data,
-                "paid_so_line_item_ids": paid_so_line_item_ids,
-                "is_booking_amount": is_booking_amount,
-            }
-
-            return complete_data, status.HTTP_200_OK, None
-
-        else:
-            # For non-India entity
-            serializer = SalesOrderSerializer(sales_order)
-            line_items = V2SalesOrderLineItemSerializer(
-                SalesOrderLineItem.objects.filter(salesorder=sales_order), many=True
-            ).data
-            paid_so_line_item_ids = get_paid_so_item_ids(sales_order)
-            project_data = {}
-            if sales_order.caas_project:
-                project_data["caas_project"] = sales_order.caas_project.id
-                project_data["caas_project_name"] = sales_order.caas_project.name
-            if sales_order.schedular_project:
-                project_data["schedular_project"] = sales_order.schedular_project.id
-                project_data["schedular_project_name"] = sales_order.schedular_project.name
-            complete_data = {
-                **serializer.data,
-                **project_data,
-                "paid_so_line_item_ids": paid_so_line_item_ids,
-                "line_items": line_items,
-            }
-
-            return complete_data, status.HTTP_200_OK, None
+        return complete_data, status.HTTP_200_OK, None
 
     except Exception as e:
         print(f"Error in get_sales_order_data_util: {str(e)}")
@@ -2105,12 +1888,6 @@ def get_sales_order_data_util(salesorder_id):
 @permission_classes([IsAuthenticated])
 def get_sales_order_data(request, salesorder_id):
     try:
-        sales_order = SalesOrder.objects.filter(salesorder_id=salesorder_id).first()
-        if not sales_order:
-            return Response(
-                {"error": "Sales order not found"}, status=status.HTTP_404_NOT_FOUND
-            )
-        # Get sales order data
         data, status_code, error = get_sales_order_data_util(salesorder_id)
         if error:
             return Response({"error": error}, status=status_code)
@@ -2163,9 +1940,8 @@ def get_sales_order_data_from_purchase_order_id(request, purchaseorder_id):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def get_customers_from_zoho(request, brand):
+def get_customers(request):
     try:
-
         entity_id = request.query_params.get("entity")
         entity = Entity.objects.filter(id=entity_id).first()
         customers = ZohoCustomer.objects.filter(entity=entity)
@@ -2178,29 +1954,22 @@ def get_customers_from_zoho(request, brand):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def get_customer_details_from_zoho(request, customer_id):
+def get_customer_details(request, customer_id):
     try:
-        entity_id = request.query_params.get("entity")
         generate_so_without_invoice = request.query_params.get(
             "generate_so_without_invoice"
         )
 
-        entity = Entity.objects.filter(id=entity_id).first()
         zoho_vendor = None
-        if entity and entity.id == int(env("INDIA_ENTITY_ID")):
-            zoho_vendor = get_vendor(customer_id)
 
+        if generate_so_without_invoice:
+            zoho_vendor = ZohoCustomer.objects.filter(contact_id=customer_id).first()
         else:
-            if generate_so_without_invoice:
-                zoho_vendor = ZohoCustomer.objects.filter(
-                    contact_id=customer_id
-                ).first()
-            else:
-                zoho_vendor = ZohoCustomer.objects.filter(id=customer_id).first()
-            if zoho_vendor:
-                zoho_vendor = ZohoCustomerSerializer(zoho_vendor).data
-            else:
-                return Response({"error": "Failed to get data."}, status=500)
+            zoho_vendor = ZohoCustomer.objects.filter(id=customer_id).first()
+        if zoho_vendor:
+            zoho_vendor = ZohoCustomerSerializer(zoho_vendor).data
+        else:
+            return Response({"error": "Failed to get data."}, status=500)
         return Response(zoho_vendor)
     except Exception as e:
         print(str(e))
@@ -2352,135 +2121,101 @@ def create_invoice(request):
                 )
 
             JSONString = json.loads(request.data.get("JSONString"))
-            if entity.id == int(env("INDIA_ENTITY_ID")):
-                access_token = get_access_token(env("ZOHO_REFRESH_TOKEN"))
-                if not access_token:
-                    raise Exception(
-                        "Access token not found. Please generate an access token first."
-                    )
-                api_url = f"{base_url}/invoices?organization_id={organization_id}"
-                auth_header = {"Authorization": f"Bearer {access_token}"}
-                response = requests.post(
-                    api_url, headers=auth_header, data=request.data
-                )
-                if response.status_code == 201:
-                    invoice_created = response.json().get("invoice")
-                    if invoice_created:
-                        create_or_update_client_invoice(invoice_created["invoice_id"])
-                    invoice_instance = ClientInvoice.objects.get(
-                        invoice_id=invoice_created["invoice_id"]
-                    )
-                    invoice_instance.entity = entity
-                    for purchase_order in purchase_orders:
-                        invoice_instance.purchase_orders.add(purchase_order)
-                    invoice_instance.save()
-                    return Response(
-                        {
-                            "message": "The Invoice Generated is saved as Draft Successfully."
-                        }
-                    )
-                else:
-                    print(response.json())
-                    return Response(status=401)
-            else:
-                formatted_custom_fields_data = build_custom_fields_and_hash(
-                    JSONString.get("custom_fields")
-                )
-                JSONString["custom_fields"] = formatted_custom_fields_data[
-                    "custom_fields"
-                ]
-                JSONString["custom_field_hash"] = formatted_custom_fields_data[
-                    "custom_field_hash"
-                ]
 
-                if request.data.get("without_sales_order", None):
-                    z_c = ZohoCustomer.objects.filter(
-                        contact_id=request.data.get("zoho_customer")
-                    ).first()
-                    JSONString["zoho_customer"] = z_c.id
+            formatted_custom_fields_data = build_custom_fields_and_hash(
+                JSONString.get("custom_fields")
+            )
+            JSONString["custom_fields"] = formatted_custom_fields_data["custom_fields"]
+            JSONString["custom_field_hash"] = formatted_custom_fields_data[
+                "custom_field_hash"
+            ]
 
-                serializer = ClientInvoiceSerializer(data=JSONString)
+            if request.data.get("without_sales_order", None):
+                z_c = ZohoCustomer.objects.filter(
+                    contact_id=request.data.get("zoho_customer")
+                ).first()
+                JSONString["zoho_customer"] = z_c.id
 
-                if serializer.is_valid():
-                    client_invoice = serializer.save()
-                    client_invoice.invoice_id = f"M-{client_invoice.id}"
-                    client_invoice.entity = entity
-                    for purchase_order in purchase_orders:
-                        client_invoice.purchase_orders.add(purchase_order)
-                    client_invoice.save()
-                    for line_item in JSONString["line_items"]:
-                        line_item_serializer = ClientInvoiceLineItemSerializer(
-                            data=line_item
-                        )
-                        if line_item_serializer.is_valid():
-                            instance = line_item_serializer.save()
-                            instance.line_item_id = f"M-{instance.id}"
-                            instance.save()
-                            client_invoice.client_invoice_line_items.add(instance)
-                        else:
-                            print(
-                                JSONString["invoice_number"],
-                                line_item_serializer.errors,
-                            )
+            serializer = ClientInvoiceSerializer(data=JSONString)
 
-                    rate = get_exchange_rate(JSONString.get("currency_code"), "INR")
-                    line_item_totals = get_totals_for_client_invoice_line_items(
-                        client_invoice.client_invoice_line_items.all()
+            if serializer.is_valid():
+                client_invoice = serializer.save()
+                client_invoice.invoice_id = f"M-{client_invoice.id}"
+                client_invoice.entity = entity
+                for purchase_order in purchase_orders:
+                    client_invoice.purchase_orders.add(purchase_order)
+                client_invoice.save()
+                for line_item in JSONString["line_items"]:
+                    line_item_serializer = ClientInvoiceLineItemSerializer(
+                        data=line_item
                     )
-                    client_invoice.exchange_rate = rate
-                    client_invoice.price_precision = 2
-                    client_invoice.total = line_item_totals["total"]
-                    client_invoice.sub_total = line_item_totals["sub_total"]
-                    client_invoice.sub_total_inclusive_of_tax = line_item_totals[
-                        "sub_total_inclusive_of_tax"
-                    ]
-                    client_invoice.tax_total = line_item_totals["tax_total"]
-                    # client_invoice.total_quantity = line_item_totals['total_quantity']
-                    client_invoice.created_time = datetime.now()
-                    client_invoice.created_date = datetime.now().date()
-                    client_invoice.last_modified_time = datetime.now()
-                    sales_order = SalesOrder.objects.filter(
-                        salesorder_id=JSONString.get("salesorder_id")
-                    ).first()
-                    quantiy_invocied_in_items = get_quantity_invoices(
-                        client_invoice.client_invoice_line_items.all()
-                    )
-                    # updating so quantity input and if so line item is invoiced
-                    for line_item in sales_order.so_line_items.all():
-                        if line_item.line_item_id in quantiy_invocied_in_items:
-                            line_item.is_invoiced = True
-                            line_item.quantity_invoiced += quantiy_invocied_in_items[
-                                line_item.line_item_id
-                            ]
-                            line_item.save()
-                    sales_order.save()
-                    client_invoice.sales_order = sales_order
-                    client_invoice.save()
-                    client_invoice = update_invoice_status_and_balance(client_invoice)
-                    # updating sales order fields on invoicing
-                    sales_order.invoices = ClientInvoiceGetSerializer(
-                        ClientInvoice.objects.filter(sales_order=sales_order), many=True
-                    ).data
-                    sales_order_line_item_totals = (
-                        get_sales_order_totals_client_invoice(
-                            sales_order.so_line_items.all()
-                        )
-                    )
-                    if (
-                        sales_order_line_item_totals["total_quantity"]
-                        == sales_order_line_item_totals["total_invoiced_quantity"]
-                    ):
-                        sales_order.status = "invoiced"
-                        sales_order.invoiced_status = "invoiced"
+                    if line_item_serializer.is_valid():
+                        instance = line_item_serializer.save()
+                        instance.line_item_id = f"M-{instance.id}"
+                        instance.save()
+                        client_invoice.client_invoice_line_items.add(instance)
                     else:
-                        sales_order.status = "partially_invoiced"
-                        sales_order.invoiced_status = "partially_invoiced"
-                    sales_order.save()
-                    res_data = ClientInvoiceSerializer(client_invoice).data
-                    return Response(res_data, status=201)
+                        print(
+                            JSONString["invoice_number"],
+                            line_item_serializer.errors,
+                        )
+
+                rate = get_exchange_rate(JSONString.get("currency_code"), "INR")
+                line_item_totals = get_totals_for_client_invoice_line_items(
+                    client_invoice.client_invoice_line_items.all()
+                )
+                client_invoice.exchange_rate = rate
+                client_invoice.price_precision = 2
+                client_invoice.total = line_item_totals["total"]
+                client_invoice.sub_total = line_item_totals["sub_total"]
+                client_invoice.sub_total_inclusive_of_tax = line_item_totals[
+                    "sub_total_inclusive_of_tax"
+                ]
+                client_invoice.tax_total = line_item_totals["tax_total"]
+                # client_invoice.total_quantity = line_item_totals['total_quantity']
+                client_invoice.created_time = datetime.now()
+                client_invoice.created_date = datetime.now().date()
+                client_invoice.last_modified_time = datetime.now()
+                sales_order = SalesOrder.objects.filter(
+                    salesorder_id=JSONString.get("salesorder_id")
+                ).first()
+                quantiy_invocied_in_items = get_quantity_invoices(
+                    client_invoice.client_invoice_line_items.all()
+                )
+                # updating so quantity input and if so line item is invoiced
+                for line_item in sales_order.so_line_items.all():
+                    if line_item.line_item_id in quantiy_invocied_in_items:
+                        line_item.is_invoiced = True
+                        line_item.quantity_invoiced += quantiy_invocied_in_items[
+                            line_item.line_item_id
+                        ]
+                        line_item.save()
+                sales_order.save()
+                client_invoice.sales_order = sales_order
+                client_invoice.save()
+                client_invoice = update_invoice_status_and_balance(client_invoice)
+                # updating sales order fields on invoicing
+                sales_order.invoices = ClientInvoiceGetSerializer(
+                    ClientInvoice.objects.filter(sales_order=sales_order), many=True
+                ).data
+                sales_order_line_item_totals = get_sales_order_totals_client_invoice(
+                    sales_order.so_line_items.all()
+                )
+                if (
+                    sales_order_line_item_totals["total_quantity"]
+                    == sales_order_line_item_totals["total_invoiced_quantity"]
+                ):
+                    sales_order.status = "invoiced"
+                    sales_order.invoiced_status = "invoiced"
                 else:
-                    print(serializer.errors)
-                    return Response({"error": "Invalid data"}, status=404)
+                    sales_order.status = "partially_invoiced"
+                    sales_order.invoiced_status = "partially_invoiced"
+                sales_order.save()
+                res_data = ClientInvoiceSerializer(client_invoice).data
+                return Response(res_data, status=201)
+            else:
+                print(serializer.errors)
+                return Response({"error": "Invalid data"}, status=404)
     except Exception as e:
         print(str(e))
         return Response(status=404)
@@ -2757,9 +2492,7 @@ def edit_sales_order(request, sales_order_id):
             formatted_custom_fields_data = build_custom_fields_and_hash(
                 JSONString.get("custom_fields")
             )
-            JSONString["custom_fields"] = formatted_custom_fields_data[
-                "custom_fields"
-            ]
+            JSONString["custom_fields"] = formatted_custom_fields_data["custom_fields"]
             JSONString["custom_field_hash"] = formatted_custom_fields_data[
                 "custom_field_hash"
             ]
@@ -2815,9 +2548,7 @@ def edit_sales_order(request, sales_order_id):
                     )
                 # Add new line items
                 elif "line_item_id" not in line_item:
-                    line_item_serializer = SalesOrderLineItemSerializer(
-                        data=line_item
-                    )
+                    line_item_serializer = SalesOrderLineItemSerializer(data=line_item)
 
                 # Save valid line items
                 if line_item_serializer.is_valid():
@@ -2833,9 +2564,7 @@ def edit_sales_order(request, sales_order_id):
                         instance.save()
                     all_line_items_data.append(instance)
                 else:
-                    print(
-                        JSONString["salesorder_number"], line_item_serializer.errors
-                    )
+                    print(JSONString["salesorder_number"], line_item_serializer.errors)
 
             # Remove line items that are no longer needed
             SalesOrderLineItem.objects.filter(
@@ -2869,9 +2598,7 @@ def edit_sales_order(request, sales_order_id):
                 if zoho_customer:
                     sales_order_data.zoho_customer = zoho_customer
                     sales_order_data.customer_name = zoho_customer.contact_name
-                    sales_order_data.contact_category = (
-                        zoho_customer.contact_category
-                    )
+                    sales_order_data.contact_category = zoho_customer.contact_category
                     sales_order_data.tax_treatment = zoho_customer.tax_treatment
                 sales_order_data.entity = entity
                 # Associate line items with the sales order
@@ -2933,7 +2660,7 @@ def edit_sales_order(request, sales_order_id):
                         sales_order_data.save()
                     except Exception as e:
                         print(str(e))
-                
+
             return Response({"message": "Sales order updated successfully."})
     except Exception as e:
         print(str(e))
@@ -3020,16 +2747,12 @@ def create_sales_order(request):
             salesorder_created = None
             entity = Entity.objects.filter(id=request.data.get("entity")).first()
             JSONString = json.loads(request.data.get("JSONString"))
-        
-            line_items_data = process_line_item_custom_fields(
-                JSONString["line_items"]
-            )
+
+            line_items_data = process_line_item_custom_fields(JSONString["line_items"])
             formatted_custom_fields_data = build_custom_fields_and_hash(
                 JSONString.get("custom_fields")
             )
-            JSONString["custom_fields"] = formatted_custom_fields_data[
-                "custom_fields"
-            ]
+            JSONString["custom_fields"] = formatted_custom_fields_data["custom_fields"]
             JSONString["custom_field_hash"] = formatted_custom_fields_data[
                 "custom_field_hash"
             ]
@@ -3062,9 +2785,9 @@ def create_sales_order(request):
                 # Save the SalesOrder data if valid
                 sales_order = serializer.save()
                 salesorder_created = serializer.data
-                sales_order.salesorder_id = f"M-{sales_order.id}"
+                sales_order.salesorder_id = f"BSY-{sales_order.id}"
                 sales_person = Sales.objects.filter(
-                    sales_person_id=sales_order.salesperson_id
+                    id=sales_order.salesperson_id
                 ).first()
                 sales_order.added_by = sales_person.user.user
                 sales_order.save()
@@ -3123,7 +2846,6 @@ def create_sales_order(request):
                     },
                     status=500,
                 )
-          
 
             gm_sheet_id = request.data.get("gm_sheet", None)
             if gm_sheet_id:
@@ -3131,7 +2853,7 @@ def create_sales_order(request):
                     gm_sheet = GmSheet.objects.get(id=gm_sheet_id)
                     sales_order.gm_sheet = gm_sheet
                     sales_order.save()
-                    try: 
+                    try:
                         gm_sheet.client_name = sales_order.customer_name
                         gm_sheet.save()
                     except Exception as e:
@@ -3144,10 +2866,7 @@ def create_sales_order(request):
             send_mail_templates(
                 "so_emails/sales_order_mail.html",
                 (
-                    (
-                        ["finance@coachtotransformation.com"]
-                       
-                    )
+                    (["finance@coachtotransformation.com"])
                     if env("ENVIRONMENT") == "PRODUCTION"
                     else ["naveen@meeraq.com"]
                 ),
@@ -3175,7 +2894,6 @@ def create_sales_order(request):
                             "rajat@meeraq.com",
                             "sujata@meeraq.com",
                         ]
-                      
                     )
                     if env("ENVIRONMENT") == "PRODUCTION"
                     else ["tech@meeraq.com"]
@@ -3239,39 +2957,13 @@ def get_client_invoice_data(request, invoice_id):
         client_invoice_instance = ClientInvoice.objects.filter(
             invoice_id=invoice_id
         ).first()
-    if (
-        client_invoice_instance.sales_order
-        and client_invoice_instance.sales_order.entity.id == int(env("INDIA_ENTITY_ID"))
-    ):
-        access_token = get_access_token(env("ZOHO_REFRESH_TOKEN"))
-        if access_token:
-            api_url = (
-                f"{base_url}/invoices/{invoice_id}?organization_id={organization_id}"
-            )
-            auth_header = {"Authorization": f"Bearer {access_token}"}
-            response = requests.get(api_url, headers=auth_header)
-            if response.status_code == 200:
-                client_invoice = response.json().get("invoice")
-                return Response(client_invoice, status=status.HTTP_200_OK)
-            else:
-                return Response(
-                    {"error": "Failed to fetch invoices data"},
-                    status=response.status_code,
-                )
-        else:
-            return Response(
-                {
-                    "error": "Access token not found. Please generate an access token first."
-                },
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-    else:
-        serializer = ClientInvoiceSerializer(client_invoice_instance)
-        line_items = V2ClientInvoiceLineItemSerializer(
-            ClientInvoiceLineItem.objects.filter(clientinvoice=client_invoice_instance),
-            many=True,
-        ).data
-        return Response({**serializer.data, "line_items": line_items}, status=200)
+
+    serializer = ClientInvoiceSerializer(client_invoice_instance)
+    line_items = V2ClientInvoiceLineItemSerializer(
+        ClientInvoiceLineItem.objects.filter(clientinvoice=client_invoice_instance),
+        many=True,
+    ).data
+    return Response({**serializer.data, "line_items": line_items}, status=200)
 
 
 @api_view(["POST"])
@@ -3281,7 +2973,7 @@ def update_client_invoice_status(request, invoice_id, status):
         client_invoice_instance = ClientInvoice.objects.filter(
             invoice_id=invoice_id
         ).first()
-        
+
         client_invoice_instance.status = "sent"
         client_invoice_instance.current_sub_status = "sent"
         client_invoice_instance.save()
@@ -3291,13 +2983,12 @@ def update_client_invoice_status(request, invoice_id, status):
         return Response(status=404)
 
 
-
 @api_view(["PUT"])
 @permission_classes([IsAuthenticated])
 def update_sales_order_status(request, sales_order_id, status):
     try:
         sales_order = SalesOrder.objects.get(salesorder_id=sales_order_id)
-    
+
         if sales_order.status == "draft":
             sales_order.status == "open"
             sales_order.order_status == "open"
@@ -3308,33 +2999,158 @@ def update_sales_order_status(request, sales_order_id, status):
         return Response(status=404)
 
 
-
-
-
 @api_view(["PUT"])
 @permission_classes([IsAuthenticated])
 def edit_vendor(request, vendor_id):
     try:
         with transaction.atomic():
-            vendor = Vendor.objects.get(vendor_id=vendor_id)
+            # Get vendor and related zoho_vendor
+            try:
+                vendor = Vendor.objects.get(vendor_id=vendor_id)
+                zoho_vendor = vendor.zoho_vendor
+            except Vendor.DoesNotExist:
+                return Response(
+                    {"error": "Vendor not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
             data = request.data
-            phone = data.get("phone", "")
-            vendor_details = ZohoVendor.objects.get(vendor_id=vendor_id)
-            name = vendor_details.contact_name
-            vendor.user.user.save()
-            vendor.name = name
-            vendor.phone = phone
-            vendor.hsn_or_sac = data.get("hsn_or_sac", vendor.hsn_or_sac)
+
+            # Update ZohoVendor first
+            zoho_vendor.contact_name = data.get("name", zoho_vendor.contact_name)
+            zoho_vendor.company_name = data.get(
+                "company_name", zoho_vendor.company_name
+            )
+            zoho_vendor.first_name = data.get("first_name", zoho_vendor.first_name)
+            zoho_vendor.last_name = data.get("last_name", zoho_vendor.last_name)
+            zoho_vendor.email = data.get("email", zoho_vendor.email)
+            zoho_vendor.phone = data.get("phone", zoho_vendor.phone)
+            zoho_vendor.mobile = data.get("phone", zoho_vendor.mobile)
+            zoho_vendor.gst_treatment = data.get(
+                "gst_treatment", zoho_vendor.gst_treatment
+            )
+            zoho_vendor.gst_no = data.get("gstn_uni", zoho_vendor.gst_no)
+            zoho_vendor.pan_no = data.get("pan", zoho_vendor.pan_no)
+            zoho_vendor.place_of_contact = data.get(
+                "place_of_contact", zoho_vendor.place_of_contact
+            )
+            zoho_vendor.currency_id = data.get("currency", zoho_vendor.currency_id)
+            zoho_vendor.tds_tax_id = data.get("tds", zoho_vendor.tds_tax_id)
+
+            # Update billing address
+            current_billing = zoho_vendor.billing_address or {}
+            zoho_vendor.billing_address = {
+                "attention": data.get(
+                    "attention", current_billing.get("attention", "")
+                ),
+                "country": data.get("country", current_billing.get("country", "")),
+                "address": data.get("address", current_billing.get("address", "")),
+                "city": data.get("city", current_billing.get("city", "")),
+                "state": data.get("state", current_billing.get("state", "")),
+                "zip": data.get("zip_code", current_billing.get("zip", "")),
+            }
+
+            # Update shipping address
+            current_shipping = zoho_vendor.shipping_address or {}
+            zoho_vendor.shipping_address = {
+                "attention": data.get(
+                    "shipping_attention", current_shipping.get("attention", "")
+                ),
+                "country": data.get(
+                    "shipping_country", current_shipping.get("country", "")
+                ),
+                "address": data.get(
+                    "shipping_address", current_shipping.get("address", "")
+                ),
+                "city": data.get("shipping_city", current_shipping.get("city", "")),
+                "state": data.get("shipping_state", current_shipping.get("state", "")),
+                "zip": data.get("shipping_zip_code", current_shipping.get("zip", "")),
+            }
+
+            # Update contact persons
+            contact_persons = zoho_vendor.contact_persons or []
+            if contact_persons:
+                # Update existing contact person
+                contact_persons[0].update(
+                    {
+                        "first_name": data.get(
+                            "first_name", contact_persons[0].get("first_name", "")
+                        ),
+                        "last_name": data.get(
+                            "last_name", contact_persons[0].get("last_name", "")
+                        ),
+                        "email": data.get("email", contact_persons[0].get("email", "")),
+                        "phone": data.get("phone", contact_persons[0].get("phone", "")),
+                    }
+                )
+            else:
+                # Create new contact person
+                contact_persons = [
+                    {
+                        "first_name": data.get("first_name", ""),
+                        "last_name": data.get("last_name", ""),
+                        "email": data.get("email", ""),
+                        "phone": data.get("phone", ""),
+                    }
+                ]
+            zoho_vendor.contact_persons = contact_persons
+
+            # Update bank accounts
+            bank_accounts = zoho_vendor.bank_accounts or []
+            if data.get("account_number"):
+                bank_account = {
+                    "beneficiary_name": data.get("beneficiary_name", ""),
+                    "bank_name": data.get("bank_name", ""),
+                    "account_number": data.get("account_number", ""),
+                    "ifsc": data.get("ifsc", ""),
+                }
+
+                if bank_accounts:
+                    # Update existing bank account
+                    bank_accounts[0] = bank_account
+                else:
+                    # Add new bank account
+                    bank_accounts = [bank_account]
+
+                zoho_vendor.bank_accounts = bank_accounts
+
+            # Update notes/remarks
+            zoho_vendor.notes = data.get("remarks", zoho_vendor.notes)
+
+            # Update last modified time
+            zoho_vendor.last_modified_time = timezone.now()
+
+            # Save ZohoVendor
+            zoho_vendor.save()
+
+            vendor.name = data.get("name", vendor.name)
+            vendor.phone = data.get("phone", vendor.phone)
+            vendor.hsn_or_sac = (
+                int(data.get("hsn_or_sac", 0))
+                if data.get("hsn_or_sac")
+                else vendor.hsn_or_sac
+            )
+
             vendor.save()
 
             return Response(
-                {"message": "Vendor updated successfully!"},
+                {
+                    "message": "Vendor updated successfully!",
+                    "vendor_id": vendor.id,
+                    "zoho_vendor_id": zoho_vendor.id,
+                },
                 status=status.HTTP_200_OK,
             )
-    except Exception as e:
-        print(str(e))
+
+    except Vendor.DoesNotExist:
         return Response(
-            {"error": "Failed to update vendor"},
+            {"error": "Vendor not found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except Exception as e:
+        print(f"Error updating vendor: {str(e)}")
+        return Response(
+            {"error": "Failed to update vendor", "details": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
@@ -3351,9 +3167,7 @@ def get_client_invoices(request):
         clientinvoices = []
 
         if salesperson_id:
-            clientinvoices = ClientInvoice.objects.filter(
-                salesperson_id=salesperson_id
-            )
+            clientinvoices = ClientInvoice.objects.filter(salesperson_id=salesperson_id)
         else:
             clientinvoices = ClientInvoice.objects.all()
 
@@ -3377,7 +3191,7 @@ def get_client_invoices(request):
 def get_all_invoices_of_sales_order(request, sales_order_id):
     try:
         sales_order_instance = SalesOrder.objects.get(salesorder_id=sales_order_id)
-        
+
         client_invoices_data = ClientInvoiceSerializer(
             ClientInvoice.objects.filter(sales_order=sales_order_instance),
             many=True,
@@ -3396,8 +3210,6 @@ def get_all_invoices_of_sales_order(request, sales_order_id):
     except Exception as e:
         print(str(e))
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
 
 
 @api_view(["GET"])
@@ -3619,9 +3431,6 @@ class SalesOrderLineItemListAPIView(generics.ListAPIView):
         return Response({"line_items": serializer.data, "total_sum": total_sum})
 
 
-
-
-
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_ctt_revenue_data(request):
@@ -3648,7 +3457,6 @@ def get_meeraq_revenue_data(request):
         else status.HTTP_500_INTERNAL_SERVER_ERROR
     )
     return Response(revenue_data, status=status_code)
-
 
 
 @api_view(["GET"])
@@ -3726,9 +3534,7 @@ def edit_purchase_order(request, po_id):
 
         line_items_data = process_line_item_custom_fields(data["line_items"])
         line_items_data = process_po_line_item_data(line_items_data, True)
-        vendor = ZohoVendor.objects.get(
-            contact_id=purchase_order_data.vendor_id
-        )
+        vendor = ZohoVendor.objects.get(contact_id=purchase_order_data.vendor_id)
         purchase_order_data.zoho_vendor = vendor
         purchase_order_data.save()
         # Check PMO brand for guest CTT flag
@@ -3762,9 +3568,7 @@ def edit_purchase_order(request, po_id):
                     line_item_instance, data=line_item, partial=True
                 )
             else:
-                line_item_serializer = PurchaseOrderLineItemSerializer(
-                    data=line_item
-                )
+                line_item_serializer = PurchaseOrderLineItemSerializer(data=line_item)
 
             if line_item_serializer.is_valid():
                 print(f"DEBUG: Line item {index + 1} valid, saving")
@@ -3775,8 +3579,8 @@ def edit_purchase_order(request, po_id):
                     f"DEBUG: Line item {index + 1} invalid for PO {data['purchaseorder_number']}"
                     f"Errors: {line_item_serializer.errors}"
                 )
-        return Response({"message": "Purchase Order created successfully."})     
-    
+        return Response({"message": "Purchase Order created successfully."})
+
     except Exception as e:
         print(str(e))
         return Response({"error": "Failed to update purchase order."}, status=500)
@@ -3794,32 +3598,20 @@ class EntityRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class ZohoCustomerListCreateView(generics.ListCreateAPIView):
-    queryset = ZohoCustomer.objects.filter(
-        ~Q(entity__id=int(env("INDIA_ENTITY_ID")))
-    ).order_by("-created_time")
+    queryset = ZohoCustomer.objects.all().order_by("-created_time")
     serializer_class = ZohoCustomerSerializer
     pagination_class = CustomPageNumberPagination
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
     search_fields = ["contact_name", "company_name", "email"]
 
     def perform_create(self, serializer):
-        cf_meeraq_ctt = self.request.data.get("cf_meeraq_ctt", "")
         instance = serializer.save()
-        instance.cf_meeraq_ctt = cf_meeraq_ctt
-        instance.cf_meeraq_ctt_unformatted = cf_meeraq_ctt
         existing_custom_field_hash = instance.custom_field_hash or {}
-        existing_custom_field_hash["cf_meeraq_ctt"] = cf_meeraq_ctt
-        existing_custom_field_hash["cf_meeraq_ctt_unformatted"] = cf_meeraq_ctt
         instance.custom_field_hash = existing_custom_field_hash
         instance.save()
         return instance
 
     def create(self, request, *args, **kwargs):
-        if not request.data.get("cf_meeraq_ctt"):
-            return Response(
-                {"error": "Brand field is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         return super().create(request, *args, **kwargs)
 
 
@@ -3829,23 +3621,13 @@ class ZohoCustomerUpdateView(generics.UpdateAPIView):
 
     def perform_update(self, serializer):
         instance = self.get_object()
-        cf_meeraq_ctt = self.request.data.get("cf_meeraq_ctt", instance.cf_meeraq_ctt)
         instance = serializer.save()
-        instance.cf_meeraq_ctt = cf_meeraq_ctt
-        instance.cf_meeraq_ctt_unformatted = cf_meeraq_ctt
         existing_custom_field_hash = instance.custom_field_hash or {}
-        existing_custom_field_hash["cf_meeraq_ctt"] = cf_meeraq_ctt
-        existing_custom_field_hash["cf_meeraq_ctt_unformatted"] = cf_meeraq_ctt
         instance.custom_field_hash = existing_custom_field_hash
         instance.save()
         return instance
 
     def update(self, request, *args, **kwargs):
-        if not request.data.get("cf_meeraq_ctt"):
-            return Response(
-                {"error": "Brand field is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         return super().update(request, *args, **kwargs)
 
 
@@ -3879,7 +3661,9 @@ class CompanyListCreateView(generics.ListCreateAPIView):
                 else Q(added_by=self.request.user, is_deleted=False)
             )
             role = Role.objects.get(name=user_type)
-            filter_subordinates  = get_subordinates_of_a_user_in_role("Company", self.request.user, role )
+            filter_subordinates = get_subordinates_of_a_user_in_role(
+                "Company", self.request.user, role
+            )
             if filter_subordinates:
                 comapny_filter |= filter_subordinates
         queryset = Company.objects.filter(comapny_filter).order_by("-created_time")
@@ -3996,13 +3780,19 @@ class ContactListCreateView(generics.ListCreateAPIView):
         contact_filter = Q(is_deleted=False)
         if user_id == "all":
             contact_filter = Q(is_deleted=False)
-        else:            
-            contact_filter = Q(added_by__id=user_id, is_deleted=False) if user_id else Q(added_by=self.request.user, is_deleted=False)
+        else:
+            contact_filter = (
+                Q(added_by__id=user_id, is_deleted=False)
+                if user_id
+                else Q(added_by=self.request.user, is_deleted=False)
+            )
             role = Role.objects.get(name=user_type)
-            filter_subordinates  = get_subordinates_of_a_user_in_role("Contact", self.request.user, role )
+            filter_subordinates = get_subordinates_of_a_user_in_role(
+                "Contact", self.request.user, role
+            )
             if filter_subordinates:
                 contact_filter |= filter_subordinates
-            
+
         queryset = Contact.objects.filter(contact_filter).order_by("-created_time")
         return queryset
 
@@ -4123,9 +3913,15 @@ class DealListCreateView(generics.ListCreateAPIView):
         if user_id == "all":
             deals_filter = Q(is_deleted=False)
         else:
-            deals_filter = Q(added_by__id=user_id, is_deleted=False) if user_id else  Q(added_by=self.request.user, is_deleted=False)
+            deals_filter = (
+                Q(added_by__id=user_id, is_deleted=False)
+                if user_id
+                else Q(added_by=self.request.user, is_deleted=False)
+            )
             role = Role.objects.get(name=user_type)
-            filter_subordinates  = get_subordinates_of_a_user_in_role("Deal", self.request.user, role )
+            filter_subordinates = get_subordinates_of_a_user_in_role(
+                "Deal", self.request.user, role
+            )
             if filter_subordinates:
                 deals_filter |= filter_subordinates
         queryset = Deal.objects.filter(deals_filter).order_by("-created_time")
@@ -4245,28 +4041,36 @@ class DealDetailView(generics.RetrieveUpdateDestroyAPIView):
             # Always save the updated 'is_deleted' state
             instance.save()
 
+
 class DealFileUploadView(generics.GenericAPIView):
     queryset = Deal.objects.filter(is_deleted=False)
-    serializer_class = DealSerializer  # or create a dedicated serializer for the file if needed
+    serializer_class = (
+        DealSerializer  # or create a dedicated serializer for the file if needed
+    )
     lookup_field = "deal_id"
     # parser_classes = [MultiPartParser, FormParser]  # enable file upload parsing
 
     def put(self, request, *args, **kwargs):
         print("hello")
         deal = get_object_or_404(Deal, deal_id=kwargs.get("deal_id"), is_deleted=False)
-        
+
         # Expecting the file field name in the request to be 'file'
         uploaded_file = request.data.get("deal_file")
         if not uploaded_file:
-            return Response({"error": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "No file provided."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Assuming your Deal model has a FileField or similar attribute called 'attachment' or 'file'
         # Replace 'attachment' below with the actual field name in your model
         deal.deal_file = uploaded_file
         deal.save()
 
-        return Response({"message": "File uploaded successfully."}, status=status.HTTP_200_OK)
-    
+        return Response(
+            {"message": "File uploaded successfully."}, status=status.HTTP_200_OK
+        )
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_pipelines_data(request):
@@ -4526,8 +4330,6 @@ class FilteredPurchaseOrderView(generics.ListAPIView):
         invoice_pending = self.request.query_params.get("invoice_pending")
         status = self.request.query_params.get("status_client_invoice")
 
-        
-
         queryset = PurchaseOrder.objects.filter(
             is_billed_to_client=True,
         )
@@ -4580,7 +4382,7 @@ class FilteredPurchaseOrderViewExcel(generics.ListAPIView):
 
             entry = {
                 "purchaseorder_id": po.purchaseorder_id,
-                "purchase_order_no": po.purchaseorder_number, 
+                "purchase_order_no": po.purchaseorder_number,
                 "facilitator_name": po.vendor_name,
                 "raised_amount": {
                     "currency_symbol": po.currency_symbol,
@@ -4612,7 +4414,6 @@ class FilteredPurchaseOrderViewExcel(generics.ListAPIView):
 
         # Add data rows
         for po in queryset:
-        
 
             client_invoice = ClientInvoice.objects.filter(purchase_order=po).first()
             client_invoice_number = (
@@ -4648,7 +4449,6 @@ class FilteredPurchaseOrderViewExcel(generics.ListAPIView):
         response["Content-Disposition"] = "attachment; filename=PurchaseOrders.xlsx"
         workbook.save(response)
         return response
-
 
 
 class CreditNoteListCreateView(generics.ListCreateAPIView):
@@ -4869,7 +4669,7 @@ class BillListCreateAPIView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         data = request.data
         purchase_orders = None
-
+        invoice_number = request.data["invoice_number"]
         vendor = ZohoVendor.objects.get(contact_id=request.data["vendor_id"])
         data["zoho_vendor"] = vendor.id
         purchase_order_ids = request.data["purchaseorder_ids"]
@@ -4921,7 +4721,7 @@ class BillListCreateAPIView(generics.ListCreateAPIView):
 
             purchase_order.save()
         # adding bill to invoice data
-        map_bill_to_invoice(instance)
+        map_bill_to_invoice(instance, invoice_number)
         headers = self.get_success_headers(serializer.data)
         return Response(
             serializer.data, status=status.HTTP_201_CREATED, headers=headers
@@ -4966,7 +4766,7 @@ def generate_purchase_order_pdf(request, purchase_order_id):
     vendor = po.zoho_vendor
     entity = Entity.objects.last()
     context = {
-        "logo_path": "https://billing.meeraq.com/ZFInvoiceLogo.zbfs?logo_id=ca93442e6cdd711e5eb36ff696767231",
+        "logo_path": "https://blueskycsr.com/wp-content/uploads/2023/10/Bluesky-Logo.png",
         # Company Information
         "company_info": {
             "name": entity.name,  # You might want to store this in settings
@@ -5118,7 +4918,7 @@ def generate_bill_pdf(request, bill_id):
         }
 
         # Get the absolute path to your logo
-        logo_path = "https://billing.meeraq.com/ZFInvoiceLogo.zbfs?logo_id=ca93442e6cdd711e5eb36ff696767231"
+        logo_path = "https://blueskycsr.com/wp-content/uploads/2023/10/Bluesky-Logo.png"
         context["logo_path"] = logo_path
 
         # Render the HTML template to string
@@ -5156,10 +4956,8 @@ def generate_bill_pdf(request, bill_id):
 @permission_classes([IsAuthenticated])
 def get_vendor_login_data(request, vendor_id):
     vendor = Vendor.objects.get(vendor_id=vendor_id)
-    response_data, response_status =  get_role_response(vendor.user.user, "vendor", [], brand="")
+    response_data, response_status = get_role_response(vendor.user.user, "vendor", [])
     return Response(response_data, status=status.HTTP_200_OK)
-
-
 
 
 @api_view(["GET"])
@@ -5187,7 +4985,6 @@ def max_gmsheet_number(request):
         next_gmsheet_number = f"{current_financial_year}/PRO001"
 
     return Response({"max_number": next_gmsheet_number})
-
 
 
 class GMSheetDetailAPIView(APIView):
@@ -5241,3 +5038,142 @@ class GMSheetDetailAPIView(APIView):
 
         return Response(gm_sheets_data, status=status.HTTP_200_OK)
 
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_vendor(request):
+    try:
+        data = request.data
+        with transaction.atomic():
+            if Vendor.objects.filter(email=data["email"]).exists():
+                return Response(
+                    {"error": "Vendor with the same email already exists."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if all(
+                key in data for key in ["name", "first_name", "email", "gst_treatment"]
+            ):
+                entity = Entity.objects.get(id=data.get("entity"))
+                vendor_id = str(random.randint(1000000000, 9999999999))
+                # Create ZohoVendor first
+                zoho_vendor = ZohoVendor.objects.create(
+                    contact_id=vendor_id,
+                    contact_name=data.get("name"),
+                    company_name=data.get("company_name", ""),
+                    first_name=data.get("first_name"),
+                    last_name=data.get("last_name", ""),
+                    email=data.get("email"),
+                    phone=data.get("phone", ""),
+                    mobile=data.get(
+                        "phone", ""
+                    ),  # Using phone as mobile if mobile not provided
+                    gst_treatment=data.get("gst_treatment"),
+                    gst_no=data.get("gstn_uni", ""),
+                    pan_no=data.get("pan", ""),
+                    place_of_contact=data.get("place_of_contact", ""),
+                    currency_id=data.get("currency", ""),
+                    currency_code=data.get("currency", ""),
+                    currency_symbol=get_currency_symbol(data.get("currency", "")),
+                    tds_tax_id=data.get("tds", ""),
+                    # Billing Address
+                    billing_address={
+                        "attention": data.get("attention", ""),
+                        "country": data.get("country", ""),
+                        "address": data.get("address", ""),
+                        "city": data.get("city", ""),
+                        "state": data.get("state", ""),
+                        "zip": data.get("zip_code", ""),
+                    },
+                    # Shipping Address
+                    shipping_address={
+                        "attention": data.get("shipping_attention", ""),
+                        "country": data.get("shipping_country", ""),
+                        "address": data.get("shipping_address", ""),
+                        "city": data.get("shipping_city", ""),
+                        "state": data.get("shipping_state", ""),
+                        "zip": data.get("shipping_zip_code", ""),
+                    },
+                    # Contact persons array
+                    contact_persons=[
+                        {
+                            "first_name": data.get("first_name"),
+                            "last_name": data.get("last_name", ""),
+                            "email": data.get("email"),
+                            "phone": data.get("phone", ""),
+                        }
+                    ],
+                    # Bank account information (stored in bank_accounts JSON field)
+                    bank_accounts=(
+                        [
+                            {
+                                "beneficiary_name": data.get("beneficiary_name", ""),
+                                "bank_name": data.get("bank_name", ""),
+                                "account_number": data.get("account_number", ""),
+                                "ifsc": data.get("ifsc", ""),
+                            }
+                        ]
+                        if data.get("account_number")
+                        else []
+                    ),
+                    # Additional fields
+                    notes=data.get("remarks", ""),
+                    status="active",
+                    contact_type="vendor",
+                    is_portal_enabled=True,
+                    entity=entity,
+                )
+
+                # Handle user creation/retrieval
+                user_profile = Profile.objects.filter(
+                    user__username=data["email"]
+                ).first()
+                if user_profile:
+                    user = user_profile.user
+                else:
+                    temp_password = "".join(
+                        random.choices(string.ascii_letters + string.digits, k=8)
+                    )
+                    user = User.objects.create_user(
+                        username=data["email"],
+                        password=temp_password,
+                        email=data["email"],
+                        first_name=data.get("first_name", ""),
+                        last_name=data.get("last_name", ""),
+                    )
+                    user_profile = Profile.objects.create(user=user)
+
+                # Add vendor role
+                vendor_role, created = Role.objects.get_or_create(name="vendor")
+                user_profile.roles.add(vendor_role)
+
+                # Create Vendor instance and link it to ZohoVendor
+                vendor = Vendor.objects.create(
+                    user=user_profile,
+                    name=data["name"],
+                    email=data["email"],
+                    phone=data.get("phone", ""),
+                    vendor_id=vendor_id,
+                    zoho_vendor=zoho_vendor,
+                )
+
+                return Response(
+                    {
+                        "message": "Vendor created successfully!",
+                        "vendor_id": vendor.id,
+                        "zoho_vendor_id": zoho_vendor.id,
+                    },
+                    status=status.HTTP_201_CREATED,
+                )
+
+            else:
+                return Response(
+                    {"error": "Fill in all the required details."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+    except Exception as e:
+        print(f"Error creating vendor: {str(e)}")
+        return Response(
+            {"error": "Failed to create vendor", "details": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

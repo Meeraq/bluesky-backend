@@ -434,7 +434,7 @@ def get_current_financial_year():
 
 
 def generate_new_po_number(
-    po_list, regex_to_match, production=True, is_india_entity=True
+    po_list, regex_to_match, production=True
 ):
     # pattern to match the purchase order number
     pattern = rf"^{regex_to_match}\d+$"
@@ -447,15 +447,11 @@ def generate_new_po_number(
     for po in filtered_pos:
         print(po["purchaseorder_number"].split("/"))
         if production:
-            if is_india_entity:
-                _, _, _, _, po_number = po["purchaseorder_number"].split("/")
-            else:
-                _, _, _, _, _, po_number = po["purchaseorder_number"].split("/")
+            _, _, _, _, po_number = po["purchaseorder_number"].split("/")
+            
         else:
-            if is_india_entity:
-                _, _, _, _, _, po_number = po["purchaseorder_number"].split("/")
-            else:
-                _, _, _, _, _, _, po_number = po["purchaseorder_number"].split("/")
+            _, _, _, _, _, po_number = po["purchaseorder_number"].split("/")
+            
         latest_number = max(latest_number, int(po_number))
     # Generating the new purchase order number
     new_number = latest_number + 1
@@ -493,7 +489,7 @@ def generate_new_ctt_po_number(
     return new_po_number
 
 
-def generate_new_so_number(so_list, regex_to_match, production, is_india_entity):
+def generate_new_so_number(so_list, regex_to_match, production, entity):
     # Pattern to match the sales order number based on entity
     pattern = rf"^{regex_to_match}\d+$"
     # Filter out sales orders with the desired format
@@ -676,19 +672,10 @@ def filter_objects_by_date(objects, days):
 
 
 
-def map_bill_to_invoice(bill_instance):
+def map_bill_to_invoice(bill_instance,invoice_number=None):
     try:
-        # If bill is mapped to any other invoice then remove it too
-        InvoiceData.objects.filter(bill=bill_instance).update(bill=None)        
-        # Find and map the correct invoice
-        filter_kwargs = {
-            "vendor_id": bill_instance.vendor_id,
-            "invoice_number": bill_instance.custom_field_hash["cf_invoice"],
-            "invoice_date": bill_instance.date,
-        }
-        if bill_instance.purchaseorder_ids:
-            filter_kwargs["purchase_order_id"] = bill_instance.purchaseorder_ids[0]
-        invoice = InvoiceData.objects.get(**filter_kwargs)
+  
+        invoice = InvoiceData.objects.get(invoice_number=invoice_number)
         invoice.bill = bill_instance
         invoice.save()
     except Exception as e:
@@ -771,9 +758,7 @@ def create_singapore_purchase_order(request, JSONString, entity):
             vendor = ZohoVendor.objects.get(contact_id=po_instance.vendor_id)
             po_instance.zoho_vendor = vendor
             po_instance.save()
-            pmo = Pmo.objects.filter(email=request.user.username).first()
-            po_instance.is_guest_ctt = True if pmo and pmo.brand == "ctt" else False
-            po_instance.purchaseorder_id = f"M-{po_instance.id}"
+            po_instance.purchaseorder_id = f"BSC-{po_instance.id}"
             po_instance.created_time = datetime.now()
             po_instance.created_date = datetime.now().date()
             rate = get_exchange_rate(vendor.currency_code, "INR")
@@ -826,6 +811,7 @@ def create_singapore_purchase_order(request, JSONString, entity):
             return None
 
     except Exception as e:
+        print(str(e))
         return None
 
 

@@ -10,7 +10,9 @@ from ..models import (
     Employee
 )
 from zohoapi.models import Vendor,ZohoVendor
-
+from zohoapi.serializers import (
+    ZohoVendorSerializer,
+)
 from ..serializers import (
     EmployeeDepthOneSerializer,
     PmoDepthOneSerializer,
@@ -73,44 +75,49 @@ def get_active_roles(user):
 
 
 def get_role_response(user, user_profile_role, roles):
-    serializer_class = ROLE_SERIALIZERS.get(user_profile_role)
-    if not serializer_class:
-        return None, "Failed to get user details"
-    profile_role_obj = getattr(user.profile, user_profile_role.replace("_", ""))
-    if not profile_role_obj.active_inactive:
-        return None, "User role is not active"
-    serializer = serializer_class(profile_role_obj)
-    response_data = {
-        **serializer.data,
-        "roles": roles,
-        "user": {**serializer.data["user"], "type": user_profile_role},
-        "last_login": user.last_login,
-    }
-    additional_data = {}
-    if user_profile_role == "vendor":
-        zoho_vendor = ZohoVendor.objects.get(vendor_id=serializer.data["vendor_id"])
-        login_timestamp = timezone.now()
-        UserLoginActivity.objects.create(
-            user=user, timestamp=login_timestamp, platform="caas"
-        )
-        response_data.update(
-            {
-                "zoho_vendor": zoho_vendor,
-                "message": "Role changed to billing",
-            }
-        )
-    elif user_profile_role == "hr":
-        response_data.update(additional_data)
-    if response_data["user"] and response_data["user"]["permissions"]:
-        permission_ids = response_data["user"]["permissions"]
-        if permission_ids:
-            user_permissions = UserRolePermissions.objects.filter(id__in=permission_ids)
-            response_data["permissions"] = UserRolePermissionsSerializerDepthOne(
-                user_permissions, many=True
-            ).data
-        else:
-            response_data["permissions"] = []
-    return response_data, None
+    try:
+        serializer_class = ROLE_SERIALIZERS.get(user_profile_role)
+        if not serializer_class:
+            return None, "Failed to get user details"
+        profile_role_obj = getattr(user.profile, user_profile_role.replace("_", ""))
+        if not profile_role_obj.active_inactive:
+            return None, "User role is not active"
+        serializer = serializer_class(profile_role_obj)
+        response_data = {
+            **serializer.data,
+            "roles": roles,
+            "user": {**serializer.data["user"], "type": user_profile_role},
+            "last_login": user.last_login,
+        }
+        additional_data = {}
+        if user_profile_role == "vendor":
+            print(serializer.data["vendor_id"])
+            zoho_vendor = ZohoVendor.objects.get(contact_id=serializer.data["vendor_id"])
+            login_timestamp = timezone.now()
+            UserLoginActivity.objects.create(
+                user=user, timestamp=login_timestamp
+            )
+            response_data.update(
+                {
+                    "zoho_vendor": ZohoVendorSerializer(zoho_vendor).data,
+                    "message": "Role changed to billing",
+                }
+            )
+        elif user_profile_role == "hr":
+            response_data.update(additional_data)
+        if response_data["user"] and response_data["user"]["permissions"]:
+            permission_ids = response_data["user"]["permissions"]
+            if permission_ids:
+                user_permissions = UserRolePermissions.objects.filter(id__in=permission_ids)
+                response_data["permissions"] = UserRolePermissionsSerializerDepthOne(
+                    user_permissions, many=True
+                ).data
+            else:
+                response_data["permissions"] = []
+        return response_data, None
+    except Exception as e:
+        print(str(e))
+        return None, "Failed to get user details due to an error"
 
 
 def get_user_data(user, current_role=None):

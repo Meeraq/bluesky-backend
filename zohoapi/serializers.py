@@ -36,9 +36,9 @@ import base64
 from api.utils.constants import pdfkit_config
 import json
 from api.tasks import scheduled_send_mail_templates
+
 # from zohoapi.views import get_po_quantity_invoices
 import environ
-
 
 
 env = environ.Env()
@@ -120,6 +120,15 @@ class VendorSerializer(serializers.ModelSerializer):
         model = Vendor
         fields = "__all__"
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["zoho_vendor"] = (
+            ZohoVendorSerializer(instance.zoho_vendor).data
+            if instance.zoho_vendor
+            else None
+        )
+        return data
+
 
 class InvoiceStatusUpdateGetSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
@@ -162,8 +171,6 @@ class ProjectWiseFinanceSerializer(serializers.Serializer):
     currency_symbol = serializers.CharField()
 
 
-
-
 class ZohoCustomerSerializer(serializers.ModelSerializer):
     is_so_available = serializers.SerializerMethodField()
 
@@ -189,11 +196,7 @@ class SalesOrderSerializer(serializers.ModelSerializer):
 
 class SalesOrderGetSerializer(serializers.ModelSerializer):
     cf_invoicing_type = serializers.SerializerMethodField()
-    cf_ctt_batch = serializers.SerializerMethodField()
     gm_sheet_number = serializers.SerializerMethodField()
-    project_type = serializers.SerializerMethodField()
-    project_id = serializers.SerializerMethodField()
-    project_name = serializers.SerializerMethodField()
     deal_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -201,7 +204,6 @@ class SalesOrderGetSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "cf_invoicing_type",
-            "cf_ctt_batch",
             "salesorder_id",
             "salesorder_number",
             "date",
@@ -218,9 +220,6 @@ class SalesOrderGetSerializer(serializers.ModelSerializer):
             "currency_code",
             "gm_sheet_number",
             "salesperson_name",
-            "project_type",
-            "project_id",
-            "project_name",
             "deal_name",
             "entity",
             "exchange_rate",
@@ -238,39 +237,9 @@ class SalesOrderGetSerializer(serializers.ModelSerializer):
         else:
             return ""
 
-    def get_cf_ctt_batch(self, obj):
-        # Implement logic to compute the first custom field value based on obj
-        return (
-            obj.custom_field_hash.get("cf_ctt_batch", "").split(", ") if obj else None
-        )
-
     def get_gm_sheet_number(self, obj):
         # Implement logic to compute the first custom field value based on obj
         return obj.gm_sheet.gmsheet_number if obj.gm_sheet else None
-
-    def get_project_type(self, obj):
-        # Implement logic to compute the first custom field value based on obj
-        return "CAAS" if obj.caas_project else "SEEQ" if obj.schedular_project else None
-
-    def get_project_id(self, obj):
-        # Implement logic to compute the first custom field value based on obj
-        return (
-            obj.caas_project.id
-            if obj.caas_project
-            else obj.schedular_project.id if obj.schedular_project else None
-        )
-
-    def get_project_name(self, obj):
-        # Implement logic to compute the first custom field value based on obj
-        return (
-            obj.caas_project.name
-            if obj.caas_project
-            else (
-                obj.schedular_project.name
-                if obj.schedular_project
-                else obj.project_name if obj.project_name else None
-            )
-        )
 
 
 class SalesOrderLineItemSerializer(serializers.ModelSerializer):
@@ -371,6 +340,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         data["line_items"] = PurchaseOrderLineItemSerializer(
             instance.po_line_items, many=True
         ).data
+        data["entity_details"] = EntitySerializer(instance.entity).data
         return data
 
 
@@ -434,7 +404,6 @@ class OPEPurchaseOrderSerializer(serializers.ModelSerializer):
 
 class PurchaseOrderGetSerializer(serializers.ModelSerializer):
     cf_invoice_approver_s_email = serializers.SerializerMethodField()
-    project_details = serializers.SerializerMethodField()
     sales_orders = serializers.SerializerMethodField()
 
     class Meta:
@@ -461,50 +430,20 @@ class PurchaseOrderGetSerializer(serializers.ModelSerializer):
             "tax_total",
             "po_type",
             "is_billed_to_client",
-            "project_details",
             "sales_orders",
         ]
 
     def get_cf_invoice_approver_s_email(self, obj):
         return obj.custom_field_hash.get("cf_invoice_approver_s_email", "")
 
-    def get_project_details(self, obj):
-        if obj.caas_project:
-            return {
-                "project_type": "CAAS",
-                "project_id": obj.caas_project.id,
-                "project_name": obj.caas_project.name,
-                "project_status": obj.caas_project.status,
-            }
-        elif obj.schedular_project:
-            return {
-                "project_type": "SEEQ",
-                "project_id": obj.schedular_project.id,
-                "project_name": obj.schedular_project.name,
-                "project_status": obj.schedular_project.status,
-            }
-        return None
-
     def get_sales_orders(self, obj):
         """
         Get related sales orders for the project
         """
         try:
-            if obj.caas_project:
-                sales_orders = list(
-                    SalesOrder.objects.filter(
-                        caas_project=obj.caas_project
-                    ).values_list("salesorder_number", flat=True)
-                )
-            elif obj.schedular_project:
-                sales_orders = list(
-                    SalesOrder.objects.filter(
-                        schedular_project=obj.schedular_project
-                    ).values_list("salesorder_number", flat=True)
-                )
-            else:
-                return []
-            return sales_orders
+
+            return []
+            # return sales_orders
         except Exception as e:
             print(f"Error fetching related sales orders: {str(e)}")
             return []
@@ -763,9 +702,7 @@ class V2InvoiceStatusUpdateSerializer(serializers.ModelSerializer):
                     "comment": comment,
                     "approved_by": user.username,
                     "entity_info": {
-                        (
-                            f"This payment will be processed through {zoho_vendor.entity.name}"
-                        )
+                        f"This payment will be processed through {zoho_vendor.entity.name}"
                     },
                 },
             )
@@ -813,8 +750,6 @@ class V2VendorDetailSerializer(serializers.ModelSerializer):
     #     if user_data:
     #         return get_vendor(obj.vendor_id)
     #     return None
-
-
 
 
 class V2InvoiceDataPDFSerializer(serializers.ModelSerializer):
@@ -891,7 +826,7 @@ class DealSerializerDepthOne(serializers.ModelSerializer):
 
         if not instance.deal_file:
             data.pop("deal_file", None)
-            
+
         return data
 
 

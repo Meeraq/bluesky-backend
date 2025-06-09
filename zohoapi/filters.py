@@ -140,60 +140,26 @@ class PurchaseOrderListFilter(django_filters.FilterSet):
 
 
 class ClientInvoiceListFilter(django_filters.FilterSet):
-    caas_project_id = filters.NumberFilter(field_name="sales_order__caas_project__id")
-    schedular_project_id = filters.NumberFilter(
-        field_name="sales_order__schedular_project__id"
-    )
     salesperson_id = filters.CharFilter(field_name="salesperson_id")
     salesorder_id = filters.CharFilter(field_name="salesorder_id")
     participant_email = filters.CharFilter(
         field_name="zoho_customer__email", lookup_expr="icontains"
     )
-    batch_name = filters.CharFilter(
-        field_name="custom_field_hash__cf_ctt_batch", lookup_expr="icontains"
-    )
-    usertype = filters.CharFilter(method="filter_by_usertype")
     invoice_number = filters.CharFilter(method="filter_multi_value")
     customer_name = filters.CharFilter(method="filter_multi_value")
     status = filters.CharFilter(method="filter_multi_value")
     salesorder_number = filters.CharFilter(method="filter_multi_value")
-    radio_filter = filters.CharFilter(method="filter_by_radio")
     entity__name = filters.BaseInFilter(field_name="entity__name", lookup_expr="in")
 
     class Meta:
         model = ClientInvoice
         fields = [
-            "caas_project_id",
-            "schedular_project_id",
             "salesperson_id",
             "salesorder_id",
             "participant_email",
-            "batch_name",
             "entity__name",
         ]
 
-
-    def filter_by_radio(self, queryset, name, value):
-        if value == "CTT":
-            return queryset.filter(
-                Q(salesorder_number__icontains="CTT")
-                | Q(salesorder_number__icontains="ctt")
-                | Q(salesorder_number__icontains="Ctt")
-            )
-        elif value == "Meeraq":
-            return queryset.filter(
-                Q(salesorder_number__icontains="Meeraq")
-                | Q(salesorder_number__icontains="meeraq")
-                | Q(salesorder_number__icontains="Meeraq")
-            )
-        elif value == "other":
-            return queryset.filter(
-                ~(
-                    Q(salesorder_number__icontains="CTT")
-                    | Q(salesorder_number__icontains="Meeraq")
-                    | Q(salesorder_number__icontains="MRQ")
-                )
-            )
 
     def filter_json_field(self, queryset, name, value):
         values = value.split(",")

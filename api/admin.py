@@ -17,6 +17,7 @@ from .models import (
     TableHiddenColumn,
     Tickets,
     Leader,
+    Employee,
     UserRolePermissions,
     SubRole,
     TicketFeedback,
@@ -50,3 +51,4 @@ admin.site.register(SubRole)
 admin.site.register(TicketFeedback)
 admin.site.register(StandardizedFieldRequest)
 admin.site.register(StandardizedField)
+admin.site.register(Employee)

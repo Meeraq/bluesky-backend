@@ -22,7 +22,10 @@ from .models import (
     Entity,
     Payment,
     BankDetails,
-    CreditNote
+    CreditNote,
+    GmSheet,
+    Benchmark,
+    Offering,
 )
 
 # Register your models here.
@@ -49,3 +52,6 @@ admin.site.register(Entity)
 admin.site.register(Payment)
 admin.site.register(BankDetails)
 admin.site.register(CreditNote)
+admin.site.register(GmSheet)
+admin.site.register(Benchmark)
+admin.site.register(Offering)

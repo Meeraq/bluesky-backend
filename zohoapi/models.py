@@ -16,6 +16,9 @@ from datetime import datetime
 class Entity(models.Model):
     name = models.TextField(blank=True)
     billing_address = models.TextField(blank=True)
+    country= models.CharField(max_length=255, blank=True, default="")
+    gst = models.CharField(max_length=255, blank=True,default="")
+    suffix = models.CharField(max_length=255, blank=True,default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -58,6 +61,10 @@ class Vendor(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     active_inactive = models.BooleanField(default=True)
     is_msme = models.BooleanField(default=None, null=True, blank=True)
+    zoho_vendor = models.ForeignKey(
+        'zohoapi.ZohoVendor', on_delete=models.SET_NULL, blank=True, null=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.name
@@ -2144,7 +2151,7 @@ class Bill(models.Model):
         ordering = ["-created_time"]
 
     def __str__(self):
-        return f"{self.bill_id} -> {self.vendor_name}"
+        return f"{self.bill_id} -> {self.bill_number} -> {self.vendor_name}"
 
 
 class Company(models.Model):

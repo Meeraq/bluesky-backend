@@ -843,7 +843,6 @@ class GmSheetSerializer(serializers.ModelSerializer):
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
-    is_delete_allowed = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee

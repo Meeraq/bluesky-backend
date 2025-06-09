@@ -66,7 +66,7 @@ from .apis import (
     CoachingPurchaseOrderCreateView,
     InvoicesExportView,
     InvoiceAgingReportView,
-    InvoiceAgingDetailView
+    InvoiceAgingDetailView,
 )
 
 
@@ -106,10 +106,6 @@ urlpatterns = [
     path(
         "po-and-invoices/<str:purchase_order_id>/",
         views.get_purchase_order_and_invoices,
-    ),
-    path(
-        "get-bank-data/<str:vendor_id>/<str:bank_account_id>/",
-        views.get_bank_account_data,
     ),
     # path("update-vendor-id-to-coaches/", views.update_vendor_id),
     path(
@@ -195,13 +191,14 @@ urlpatterns = [
         views.get_vendor_details_from_zoho,
         name="get_vendor_details_from_zoho",
     ),
+ 
     # path(
     #     "purchase-order/create/<str:user_type>/<int:facilitator_pricing_id>/",
     #     views.create_purchase_order_api,
     #     name="create_purchase_order",
     # ),
     path(
-        "po-number/<str:po_type>/",
+        "po-number/",
         views.get_po_number_to_create,
         name="get_po_number_to_create",
     ),
@@ -211,7 +208,7 @@ urlpatterns = [
         name="get_client_invoice_number_to_create",
     ),
     path(
-        "so-number/<str:brand>/",
+        "so-number/",
         views.get_so_number_to_create,
         name="get_so_number_to_create",
     ),
@@ -290,11 +287,6 @@ urlpatterns = [
         name="get_ctt_invoices/",
     ),
     path(
-        "get-sales-order-data-pdf/<int:salesorder_id>/",
-        views.get_sales_order_data_pdf,
-        name="get_sales_order_data",
-    ),
-    path(
         "sales-order/<int:id>/download/",
         DownloadSalesOrder.as_view(),
     ),
@@ -308,14 +300,14 @@ urlpatterns = [
         views.get_sales_order_data_from_purchase_order_id,
     ),
     path(
-        "customers-from-zoho/<str:brand>/",
-        views.get_customers_from_zoho,
-        name="get_customers_from_zoho",
+        "customers/",
+        views.get_customers,
+        name="get_customers",
     ),
     path(
-        "customer-details-from-zoho/<str:customer_id>/",
-        views.get_customer_details_from_zoho,
-        name="get_customer_details_from_zoho",
+        "customer-details/<str:customer_id>/",
+        views.get_customer_details,
+        name="get_customer_details",
     ),
     path(
         "create-invoice/",
@@ -347,7 +339,6 @@ urlpatterns = [
         views.get_client_invoices,
         name="get_client_invoices",
     ),
-
     path(
         "get-client-invoice-data/<str:invoice_id>/",
         views.get_client_invoice_data,
@@ -442,7 +433,11 @@ urlpatterns = [
         "deals/", DealListCreateView.as_view(), name="deal-list-create"
     ),  # GET all, POST create
     path("deals/<str:deal_id>/", DealDetailView.as_view(), name="deal-detail"),
-    path('deals/upload-file/<str:deal_id>/', DealFileUploadView.as_view(), name='deal-file-upload'),
+    path(
+        "deals/upload-file/<str:deal_id>/",
+        DealFileUploadView.as_view(),
+        name="deal-file-upload",
+    ),
     path(
         "entities/", views.EntityListCreateView.as_view(), name="entity-list-create"
     ),  # For list and create
@@ -451,9 +446,9 @@ urlpatterns = [
         views.EntityRetrieveUpdateDestroyView.as_view(),
         name="entity-detail",
     ),  # For retrieve, update, and delete
-    path("customers/", ZohoCustomerListCreateView.as_view()),
+    path("v2/customers/", ZohoCustomerListCreateView.as_view()),
     path(
-        "customers/<int:pk>/",
+        "v2/customers/<int:pk>/",
         ZohoCustomerUpdateView.as_view(),
         name="zoho-customer-update",
     ),
@@ -505,7 +500,7 @@ urlpatterns = [
     ),
     path("bills/<str:bill_id>/pdf/", views.generate_bill_pdf, name="generate_bill_pdf"),
     path("vendor/login/data/<str:vendor_id>/", views.get_vendor_login_data),
-      path("v2/purchaseorders/", PurchaseOrderListView.as_view()),
+    path("v2/purchaseorders/", PurchaseOrderListView.as_view()),
     path("v2/purchaseorders/export/", PurchaseOrderExportView.as_view()),
     path("v2/invoices/", InvoiceListCreateAPIView.as_view()),
     path("v2/invoices/export/", InvoicesExportView.as_view()),
@@ -539,12 +534,10 @@ urlpatterns = [
     path("v2/vendors/zoho/", ZohoVendorsListView.as_view()),
     path("v2/vendor-details/<int:pk>/", VendorDetailView.as_view()),
     path("v2/vendors/<int:id>/update/", VendorUpdateView.as_view()),
-    
     path(
         "v2/purchase-order/create/<str:project_type>/<int:project_id>/",
         CoachingPurchaseOrderCreateView.as_view(),
     ),
-   
     path(
         "v2/invoice-aging-report/",
         InvoiceAgingReportView.as_view(),
@@ -556,7 +549,9 @@ urlpatterns = [
         name="invoice-aging-detail",
     ),
     path("gmsheet/maxNumber/", views.max_gmsheet_number, name="max_gmsheet_number"),
-     path("v2/salesorders/", SalesOrdersListView.as_view()),
-    path("gmsheet-detail/", views.GMSheetDetailAPIView.as_view(), name="gmsheet-detail"),
-
+    path("v2/salesorders/", SalesOrdersListView.as_view()),
+    path(
+        "gmsheet-detail/", views.GMSheetDetailAPIView.as_view(), name="gmsheet-detail"
+    ),
+    path("create-vendor/", views.create_vendor, name="create_vendor"),
 ]

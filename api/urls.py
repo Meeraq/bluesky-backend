@@ -166,6 +166,7 @@ urlpatterns = [
     ),
     path("v2/delete-gmsheet/", views.DeleteGmSheetView.as_view()),
     path("v2/all-gmsheet/", views.AllGmSheetView.as_view()),
+    path("all-gmsheet/", views.get_all_gmsheet),
     path("v2/offerings/<int:gmsheet_id>/", views.OfferingsByGMSheetView.as_view()),
     path(
         "v2/gmsheet-by-sales/<int:sales_person_id>", views.GMSheetBySalesView.as_view()

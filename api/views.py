@@ -13,6 +13,8 @@ import django_filters
 from api.utils.pagination import CustomPageNumberPagination
 from django.apps import apps
 from django.db import DatabaseError
+from django.utils.timezone import make_aware
+from datetime import datetime, time
 from django.db.models import (
     ForeignKey,
     ManyToManyField,
@@ -2668,8 +2670,7 @@ class OfferingsByGMSheetView(generics.ListAPIView):
         return offerings
 
 
-from django.utils.timezone import make_aware
-from datetime import datetime, time
+
 
 
 class AllGmSheetView(generics.ListAPIView):
@@ -2765,6 +2766,25 @@ class AllGmSheetView(generics.ListAPIView):
             return GmSheetDetailedSerializer
         return super().get_serializer_class()
     
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_all_gmsheet(request):
+    try:
+        gmsheet = (
+            GmSheet.objects.filter(offering__isnull=False)
+            .order_by("-created_at")
+            .distinct()
+        )
+        serializer = GmSheetDetailedSerializer(gmsheet, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+        print(str(e))
+        return Response(
+            {"error": "Failed to get GM Sheet."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
 
 class LeaderCumulativeDataView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
@@ -3324,9 +3344,7 @@ class OrganizationStructureAPIView(APIView):
 def get_employees(request):
     try:
         # Check for the 'active' query parameter
-        active = request.GET.get(
-            "active", "true"
-        ).lower()  # Default to 'true' if not provided
+        active = request.query_params.get("active")  # Default to 'true' if not provided
 
         # Filter employees based on 'status' field using the 'active' parameter
         if active == "false":
@@ -3587,3 +3605,7 @@ def update_gmsheet(request, id):
             {"error": "Failed to update data"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+    
+
+
+
