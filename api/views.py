@@ -625,7 +625,7 @@ def generate_otp(request):
 
         created_otp = OTP.objects.create(user=user, otp=otp)
         print("created_otp", created_otp)
-        user_data, error = get_user_data(user, None, platform)
+        user_data, error = get_user_data(user, None)
         if error:
             return Response({"error": "User does not exist"}, status=400)
         name = user_data.get("name") or user_data.get("first_name") or "User"

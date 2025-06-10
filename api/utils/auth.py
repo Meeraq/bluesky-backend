@@ -159,12 +159,12 @@ def get_user_with_delegation(request, current_role=None, brand="", platform=None
         acting_as = request.acting_as
         delegation_role = request.delegation_role
         delegated_user_data, error = get_user_data(
-            acting_as, delegation_role.name, brand, platform
+            acting_as, delegation_role.name
         )
         if error:
-            user_data, error = get_user_data(user, current_role, brand, platform)
+            user_data, error = get_user_data(user, current_role)
             return user_data, error
-        delegate_data, _ = get_user_data(user, None, brand, platform)
+        delegate_data, _ = get_user_data(user, None)
         delegated_user_data["under_delegation"] = True
         delegated_user_data["original_user"] = {
             "id": user.id,
@@ -178,7 +178,7 @@ def get_user_with_delegation(request, current_role=None, brand="", platform=None
         }
         return delegated_user_data, None
     else:
-        return get_user_data(user, current_role, brand, platform)
+        return get_user_data(user, current_role)
 
 
 
