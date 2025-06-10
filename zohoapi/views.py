@@ -38,6 +38,8 @@ from rest_framework import status
 from django.http import HttpResponse
 from .serializers import (
     InvoiceDataEditSerializer,
+    AssetsSerializer,
+    AssetsDetailedSerializer,
     InvoiceDataSerializer,
     VendorSerializer,
     InvoiceStatusUpdateGetSerializer,
@@ -139,6 +141,7 @@ from .models import (
     PurchaseOrderLineItem,
     GmSheet,
     HandoverDetails,
+    Assets,
 )
 import base64
 from io import BytesIO
@@ -578,54 +581,6 @@ def get_purchase_order_and_invoices(request, purchase_order_id):
         )
 
 
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def get_vendor_exists_and_not_existing_emails(request):
-    access_token = get_access_token(env("ZOHO_REFRESH_TOKEN"))
-    if access_token:
-        headers = {"Authorization": f"Bearer {access_token}"}
-        url = f"{base_url}/contacts?organization_id={env('ZOHO_ORGANIZATION_ID')}&contact_type=vendor"
-        vendor_response = requests.get(url, headers=headers)
-        if vendor_response.json()["message"] == "success":
-            existing_vendors = []
-            not_existing_vendors = []
-            for vendor in vendor_response.json()["contacts"]:
-                if vendor["email"]:
-                    try:
-                        existing_vendor = Vendor.objects.get(email=vendor["email"])
-                        existing_vendors.append(vendor["email"])
-                    except Vendor.DoesNotExist:
-                        not_existing_vendors.append(vendor["email"])
-                        pass
-            return Response(
-                {
-                    "vendors": vendor_response.json()["contacts"],
-                    "existing_vendors": existing_vendors,
-                    "not_existing_vendors": not_existing_vendors,
-                },
-                status=200,
-            )
-        else:
-            return Response({"error": "Failed to get vendors."}, status=400)
-    else:
-        return Response({"error": "Unauthorized	."}, status=400)
-
-
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def import_invoices_from_zoho(request):
-    access_token = get_access_token(env("ZOHO_REFRESH_TOKEN"))
-    if access_token:
-        headers = {"Authorization": f"Bearer {access_token}"}
-        vendors = Vendor.objects.all()
-        res = []
-        bill_details_res = []
-        for vendor in vendors:
-            import_invoices_for_vendor_from_zoho(vendor, headers, res, bill_details_res)
-        return Response({"res": res, "bill_details_res": bill_details_res}, status=200)
-    else:
-        return Response({"error": "Invalid invoices"}, status=400)
-
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
@@ -885,26 +840,6 @@ class DownloadAttatchedInvoice(APIView):
             )
 
 
-@api_view(["POST"])
-@permission_classes([IsAuthenticated, IsInRoles("pmo", "superadmin", "finance")])
-def add_vendor(request):
-    data = request.data
-    email = data.get("email", "").strip().lower()
-    vendor_id = data.get("vendor", "")
-    phone = data.get("phone", "")
-
-    try:
-        response = create_or_update_vendor_user(email, vendor_id, phone)
-        return Response(response, status=status.HTTP_200_OK)
-    except ValueError as e:
-        return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    except Exception as e:
-        return Response(
-            {"detail": "An unexpected error occurred."},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, IsInRoles("pmo", "finance", "superadmin")])
 def get_all_vendors(request):
@@ -944,10 +879,7 @@ def get_zoho_vendors(request):
 def get_all_purchase_orders(request):
     try:
         all_purchase_orders = PurchaseOrderGetSerializer(
-            PurchaseOrder.objects.filter(
-                Q(created_time__year__gte=2024)
-                | Q(purchaseorder_number__in=purchase_orders_allowed)
-            ),
+            PurchaseOrder.objects.all(),
             many=True,
         ).data
 
@@ -1188,7 +1120,7 @@ def edit_vendor_existing(request, vendor_id):
                 {"error": "User with this email already exists."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        vendor_details = get_vendor(vendor_id)
+        vendor_details = ZohoVendor.objects.get(contact_id=vendor_id)
         name = vendor_details["contact_name"]
         vendor.user.user.username = email
         vendor.user.user.email = email
@@ -1350,20 +1282,6 @@ def get_po_number_to_create(request):
         )
 
         return Response({"new_po_number": new_po_number})
-    except Exception as e:
-        print(str(e))
-        return Response(status=400)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated, IsInRoles("pmo", "finance", "sales")])
-def get_client_invoice_number_to_create(request):
-    try:
-        start_date, end_date = get_current_month_start_and_end_date()
-        query_params = f"&created_date_start={start_date}&created_date_end={end_date}"
-        invoices = fetch_client_invoices(organization_id, query_params)
-        new_invoice_number = generate_new_invoice_number(invoices)
-        return Response({"new_invoice_number": new_invoice_number})
     except Exception as e:
         print(str(e))
         return Response(status=400)
@@ -1559,155 +1477,6 @@ def get_sales_persons_sales_orders(request, sales_person_id):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_all_sales_orders_of_project(request, project_id, project_type):
-    try:
-        all_sales_orders = get_so_for_project(project_id, project_type)
-        return Response(all_sales_orders)
-    except Exception as e:
-        print(str(e))
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_all_client_invoices_of_project(request, project_id, project_type):
-    try:
-        all_sales_orders = get_so_for_project(project_id, project_type)
-        so_ids = set()
-        for sales_order in all_sales_orders:
-            so_ids.add(sales_order["salesorder_id"])
-
-        client_invoices = ClientInvoice.objects.filter(
-            sales_order__salesorder_id__in=list(so_ids)
-        )
-        serializer = ClientInvoiceSerializer(client_invoices, many=True)
-
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    except Exception as e:
-        print(str(e))
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_ctt_sales_orders(request):
-    try:
-        participant_email = request.query_params.get("participant_email")
-        batch_name = request.query_params.get("batch_name")
-        all_sales_orders = []
-        if participant_email and batch_name:
-            all_sales_orders = SalesOrderGetSerializer(
-                SalesOrder.objects.filter(
-                    Q(salesorder_number__icontains="CTT")
-                    | Q(salesorder_number__icontains="ctt")
-                    | Q(salesorder_number__icontains="Ctt"),
-                    Q(custom_field_hash__cf_ctt_batch__contains=batch_name),
-                    Q(zoho_customer__email=participant_email),
-                ),
-                many=True,
-            ).data
-        else:
-
-            all_sales_orders = SalesOrderGetSerializer(
-                SalesOrder.objects.filter(
-                    Q(salesorder_number__icontains="CTT")
-                    | Q(salesorder_number__icontains="ctt")
-                    | Q(salesorder_number__icontains="Ctt")
-                ),
-                many=True,
-            ).data
-        return Response(all_sales_orders)
-    except Exception as e:
-        print(str(e))
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_ctt_client_invoices_for_participant(request, participant_email, batch_name):
-    try:
-        client_invoices = ClientInvoice.objects.filter(
-            custom_field_hash__cf_ctt_batch__contains=batch_name,
-            zoho_customer__email=participant_email,
-            sales_order__custom_field_hash__cf_ctt_batch__contains=batch_name,
-        )
-
-        all_client_invoices = ClientInvoiceGetSerializer(
-            client_invoices, many=True
-        ).data
-        return Response(all_client_invoices)
-    except Exception as e:
-        print(str(e))
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_ctt_client_invoices(request):
-    try:
-        salesorder_id = request.query_params.get("salesorder_id")
-        all_client_invoices = []
-        if salesorder_id:
-            all_client_invoices = ClientInvoiceGetSerializer(
-                ClientInvoice.objects.filter(
-                    Q(sales_order__salesorder_id=salesorder_id)
-                    | Q(sales_order__salesorder_id=salesorder_id)
-                    | Q(sales_order__salesorder_id=salesorder_id)
-                ),
-                many=True,
-            ).data
-        else:
-            all_client_invoices = ClientInvoiceGetSerializer(
-                ClientInvoice.objects.filter(
-                    Q(sales_order__salesorder_number__icontains="CTT")
-                    | Q(sales_order__salesorder_number__icontains="ctt")
-                    | Q(sales_order__salesorder_number__icontains="Ctt")
-                ),
-                many=True,
-            ).data
-        return Response(all_client_invoices)
-    except Exception as e:
-        print(str(e))
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_ctt_purchase_orders_lxp(request):
-    try:
-        # Filter purchase orders where the order starts with 'ctt'
-        purchase_orders = PurchaseOrder.objects.filter(
-            purchaseorder_number__startswith="CTT"
-        ).distinct()
-
-        # Serialize purchase orders
-        serializer = PurchaseOrderSerializer(purchase_orders, many=True)
-
-        return Response(serializer.data)
-    except Exception as e:
-        print(str(e))
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_ctt_invoices(request):
-    try:
-        # Fetch faculty emails from the 'ctt' database
-        invoices = InvoiceData.objects.filter(
-            Q(created_at__year__gte=2024)
-            | Q(purchase_order_no__in=purchase_orders_allowed),
-            purchase_order_no__startswith="CTT",
-        )
-        invoice_serializer = InvoiceDataGetSerializer(invoices, many=True)
-        return Response(invoice_serializer.data)
-    except Exception as e:
-        print(str(e))
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
 def get_sales_order_line_items(line_items):
     """Format line items for the sales order template"""
     formatted_items = []
@@ -1808,32 +1577,6 @@ class DownloadSalesOrder(APIView):
                 {"error": "Failed to download sales order."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-
-def get_zoho_sales_order(salesorder_id, access_token):
-    """
-    Fetch sales order data from Zoho Books API.
-
-    Args:
-        salesorder_id: Zoho Sales Order ID
-        access_token: Zoho API access token
-
-    Returns:
-        dict: API response data or None if failed
-    """
-    try:
-        api_url = (
-            f"{base_url}/salesorders/{salesorder_id}?organization_id={organization_id}"
-        )
-        auth_header = {"Authorization": f"Bearer {access_token}"}
-        response = requests.get(api_url, headers=auth_header)
-
-        if response.status_code == 200:
-            return response.json().get("salesorder")
-        return None
-    except Exception as e:
-        print(f"Error fetching Zoho sales order: {str(e)}")
-        return None
 
 
 def get_existing_sales_order_data(sales_order):
@@ -2238,242 +1981,197 @@ def edit_so_invoice(request, invoice_id):
             JSONString = json.loads(request.data.get("JSONString"))
             print(f"Parsed JSONString: {JSONString}")
 
-            if entity.id == int(env("INDIA_ENTITY_ID")):
-                access_token = get_access_token(env("ZOHO_REFRESH_TOKEN"))
-                if not access_token:
-                    print("Access token not found.")
-                    return Response(
-                        {
-                            "error": "Access token not found. Please generate an access token first."
-                        },
-                        status=400,
+            formatted_custom_fields_data = build_custom_fields_and_hash(
+                JSONString.get("custom_fields")
+            )
+            JSONString["custom_fields"] = formatted_custom_fields_data["custom_fields"]
+            JSONString["custom_field_hash"] = formatted_custom_fields_data[
+                "custom_field_hash"
+            ]
+            print(f"Formatted custom fields: {formatted_custom_fields_data}")
+
+            existing_line_items = client_invoice_data.client_invoice_line_items.all()
+            existing_line_items_dict = {
+                item.line_item_id: item for item in existing_line_items
+            }
+            existing_line_item_ids = set(existing_line_items_dict.keys())
+            print(f"Existing line item IDs: {existing_line_item_ids}")
+
+            new_line_items = JSONString["line_items"]
+            incoming_line_item_ids = set(
+                line_item["line_item_id"]
+                for line_item in new_line_items
+                if "line_item_id" in line_item
+            )
+            print(f"Incoming line item IDs: {incoming_line_item_ids}")
+
+            line_item_ids_to_remove = existing_line_item_ids - incoming_line_item_ids
+            line_item_ids_to_update = existing_line_item_ids & incoming_line_item_ids
+            line_item_ids_to_add = {
+                line_item.get("line_item_id")
+                for line_item in new_line_items
+                if "line_item_id" not in line_item
+                or line_item["line_item_id"] not in existing_line_item_ids
+            }
+            print(f"Line item IDs to remove: {line_item_ids_to_remove}")
+            print(f"Line item IDs to update: {line_item_ids_to_update}")
+            print(f"Line item IDs to add: {line_item_ids_to_add}")
+
+            JSONString["line_items"] = process_line_item_custom_fields(
+                JSONString["line_items"]
+            )
+            print(f"Processed line items: {JSONString['line_items']}")
+
+            quantity_changes = {}
+
+            for line_item in JSONString["line_items"]:
+                line_item_id = line_item.get("line_item_id")
+                salesorder_item_id = line_item.get("salesorder_item_id")
+                if line_item_id in line_item_ids_to_update:
+                    existing_line_item = existing_line_items_dict[line_item_id]
+                    old_quantity = existing_line_item.quantity
+                    line_item_serializer = ClientInvoiceLineItemSerializer(
+                        existing_line_item, data=line_item, partial=True
                     )
-
-                api_url = f"{base_url}/invoices/{invoice_id}?organization_id={organization_id}"
-                auth_header = {"Authorization": f"Bearer {access_token}"}
-                response = requests.put(api_url, headers=auth_header, data=request.data)
-                print(f"Zoho API response status: {response.status_code}")
-
-                if response.status_code == 200:
-                    invoice = response.json().get("invoice")
-                    if invoice:
+                    if line_item_serializer.is_valid():
+                        updated_line_item = line_item_serializer.save()
+                        if salesorder_item_id in quantity_changes:
+                            quantity_changes[salesorder_item_id] += (
+                                updated_line_item.quantity - old_quantity
+                            )
+                        else:
+                            quantity_changes[salesorder_item_id] = (
+                                updated_line_item.quantity - old_quantity
+                            )
                         print(
-                            f"Updating client invoice with ID: {invoice['invoice_id']}"
+                            f"Updated line item ID: {line_item_id}, Quantity change: {quantity_changes[salesorder_item_id]}"
                         )
-                        create_or_update_client_invoice(invoice["invoice_id"])
-                    return Response({"message": "Invoice updated successfully."})
-                else:
-                    print(f"Error from Zoho API: {response.json()}")
-                    return Response(
-                        {"error": response.json()}, status=response.status_code
+                    else:
+                        print(
+                            f"Error in line item serializer: {line_item_serializer.errors}"
+                        )
+                        return Response(
+                            {"error": line_item_serializer.errors}, status=400
+                        )
+                elif (
+                    line_item_id in line_item_ids_to_add
+                    or "line_item_id" not in line_item
+                ):
+                    line_item_serializer = ClientInvoiceLineItemSerializer(
+                        data=line_item
                     )
+                    if line_item_serializer.is_valid():
+                        new_line_item = line_item_serializer.save()
+                        if not new_line_item.line_item_id:
+                            new_line_item.line_item_id = f"M-{new_line_item.id}"
+                            new_line_item.save()
+                        if salesorder_item_id in quantity_changes:
+                            quantity_changes[
+                                salesorder_item_id
+                            ] += new_line_item.quantity
+                        else:
+                            quantity_changes[salesorder_item_id] = (
+                                new_line_item.quantity
+                            )
+                        client_invoice_data.client_invoice_line_items.add(new_line_item)
+                        print(
+                            f"Added new line item ID: {new_line_item.line_item_id}, Quantity: {new_line_item.quantity}"
+                        )
+                    else:
+                        print(
+                            f"Error in new line item serializer: {line_item_serializer.errors}"
+                        )
+                        return Response(
+                            {"error": line_item_serializer.errors}, status=400
+                        )
+
+            for line_item_id in line_item_ids_to_remove:
+                removed_line_item = existing_line_items_dict[line_item_id]
+                if salesorder_item_id in quantity_changes:
+                    quantity_changes[
+                        removed_line_item.salesorder_item_id
+                    ] += -removed_line_item.quantity
+                else:
+                    quantity_changes[removed_line_item.salesorder_item_id] = (
+                        -removed_line_item.quantity
+                    )
+                removed_line_item.delete()
+                print(
+                    f"Removed line item ID: {line_item_id}, Quantity change: {quantity_changes[removed_line_item.salesorder_item_id]}"
+                )
+
+            serializer = ClientInvoiceSerializer(
+                client_invoice_data, data=JSONString, partial=True
+            )
+
+            if serializer.is_valid():
+                client_invoice = serializer.save()
+                client_invoice.last_modified_time = datetime.now()
+                if (
+                    "currency_code" in JSONString
+                    and JSONString.get("currency_code") != client_invoice.currency_code
+                ):
+                    rate = get_exchange_rate(JSONString.get("currency_code"), "INR")
+                    client_invoice.exchange_rate = rate
+                    print(f"Exchange rate updated: {rate}")
+
+                line_item_totals = get_totals_for_client_invoice_line_items(
+                    client_invoice.client_invoice_line_items.all()
+                )
+                client_invoice.price_precision = 2
+                client_invoice.total = line_item_totals["total"]
+                client_invoice.sub_total = line_item_totals["sub_total"]
+                client_invoice.sub_total_inclusive_of_tax = line_item_totals[
+                    "sub_total_inclusive_of_tax"
+                ]
+                client_invoice.tax_total = line_item_totals["tax_total"]
+                client_invoice.save()
+                client_invoice = update_invoice_status_and_balance(client_invoice)
+                print(f"Client invoice totals updated: {line_item_totals}")
+
+                sales_order = client_invoice.sales_order
+                sales_order_line_items = sales_order.so_line_items.all()
+                sales_order_line_items_dict = {
+                    item.line_item_id: item for item in sales_order_line_items
+                }
+
+                for line_item_id, quantity_change in quantity_changes.items():
+                    so_line_item = sales_order_line_items_dict.get(line_item_id)
+                    if so_line_item:
+                        so_line_item.quantity_invoiced += quantity_change
+                        so_line_item.is_invoiced = so_line_item.quantity_invoiced >= 0
+                        so_line_item.save()
+                        print(
+                            f"Sales order line item updated: {line_item_id}, Quantity invoiced: {so_line_item.quantity_invoiced}"
+                        )
+
+                sales_order_line_item_totals = get_sales_order_totals(
+                    sales_order.so_line_items.all()
+                )
+                print(f"Sales order line item totals: {sales_order_line_item_totals}")
+
+                if (
+                    sales_order_line_item_totals["total_quantity"]
+                    == sales_order_line_item_totals["total_invoiced_quantity"]
+                ):
+                    sales_order.status = "invoiced"
+                    sales_order.invoiced_status = "invoiced"
+                elif sales_order_line_item_totals["total_invoiced_quantity"] == 0:
+                    sales_order.status = "open"
+                    sales_order.invoiced_status = "not_invoiced"
+                else:
+                    sales_order.status = "partially_invoiced"
+                    sales_order.invoiced_status = "partially_invoiced"
+
+                sales_order.save()
+                print(
+                    f"Sales order status updated: {sales_order.status}, Invoiced status: {sales_order.invoiced_status}"
+                )
+                res_data = ClientInvoiceSerializer(client_invoice).data
+                return Response(res_data, status=200)
             else:
-                formatted_custom_fields_data = build_custom_fields_and_hash(
-                    JSONString.get("custom_fields")
-                )
-                JSONString["custom_fields"] = formatted_custom_fields_data[
-                    "custom_fields"
-                ]
-                JSONString["custom_field_hash"] = formatted_custom_fields_data[
-                    "custom_field_hash"
-                ]
-                print(f"Formatted custom fields: {formatted_custom_fields_data}")
-
-                existing_line_items = (
-                    client_invoice_data.client_invoice_line_items.all()
-                )
-                existing_line_items_dict = {
-                    item.line_item_id: item for item in existing_line_items
-                }
-                existing_line_item_ids = set(existing_line_items_dict.keys())
-                print(f"Existing line item IDs: {existing_line_item_ids}")
-
-                new_line_items = JSONString["line_items"]
-                incoming_line_item_ids = set(
-                    line_item["line_item_id"]
-                    for line_item in new_line_items
-                    if "line_item_id" in line_item
-                )
-                print(f"Incoming line item IDs: {incoming_line_item_ids}")
-
-                line_item_ids_to_remove = (
-                    existing_line_item_ids - incoming_line_item_ids
-                )
-                line_item_ids_to_update = (
-                    existing_line_item_ids & incoming_line_item_ids
-                )
-                line_item_ids_to_add = {
-                    line_item.get("line_item_id")
-                    for line_item in new_line_items
-                    if "line_item_id" not in line_item
-                    or line_item["line_item_id"] not in existing_line_item_ids
-                }
-                print(f"Line item IDs to remove: {line_item_ids_to_remove}")
-                print(f"Line item IDs to update: {line_item_ids_to_update}")
-                print(f"Line item IDs to add: {line_item_ids_to_add}")
-
-                JSONString["line_items"] = process_line_item_custom_fields(
-                    JSONString["line_items"]
-                )
-                print(f"Processed line items: {JSONString['line_items']}")
-
-                quantity_changes = {}
-
-                for line_item in JSONString["line_items"]:
-                    line_item_id = line_item.get("line_item_id")
-                    salesorder_item_id = line_item.get("salesorder_item_id")
-                    if line_item_id in line_item_ids_to_update:
-                        existing_line_item = existing_line_items_dict[line_item_id]
-                        old_quantity = existing_line_item.quantity
-                        line_item_serializer = ClientInvoiceLineItemSerializer(
-                            existing_line_item, data=line_item, partial=True
-                        )
-                        if line_item_serializer.is_valid():
-                            updated_line_item = line_item_serializer.save()
-                            if salesorder_item_id in quantity_changes:
-                                quantity_changes[salesorder_item_id] += (
-                                    updated_line_item.quantity - old_quantity
-                                )
-                            else:
-                                quantity_changes[salesorder_item_id] = (
-                                    updated_line_item.quantity - old_quantity
-                                )
-                            print(
-                                f"Updated line item ID: {line_item_id}, Quantity change: {quantity_changes[salesorder_item_id]}"
-                            )
-                        else:
-                            print(
-                                f"Error in line item serializer: {line_item_serializer.errors}"
-                            )
-                            return Response(
-                                {"error": line_item_serializer.errors}, status=400
-                            )
-                    elif (
-                        line_item_id in line_item_ids_to_add
-                        or "line_item_id" not in line_item
-                    ):
-                        line_item_serializer = ClientInvoiceLineItemSerializer(
-                            data=line_item
-                        )
-                        if line_item_serializer.is_valid():
-                            new_line_item = line_item_serializer.save()
-                            if not new_line_item.line_item_id:
-                                new_line_item.line_item_id = f"M-{new_line_item.id}"
-                                new_line_item.save()
-                            if salesorder_item_id in quantity_changes:
-                                quantity_changes[
-                                    salesorder_item_id
-                                ] += new_line_item.quantity
-                            else:
-                                quantity_changes[salesorder_item_id] = (
-                                    new_line_item.quantity
-                                )
-                            client_invoice_data.client_invoice_line_items.add(
-                                new_line_item
-                            )
-                            print(
-                                f"Added new line item ID: {new_line_item.line_item_id}, Quantity: {new_line_item.quantity}"
-                            )
-                        else:
-                            print(
-                                f"Error in new line item serializer: {line_item_serializer.errors}"
-                            )
-                            return Response(
-                                {"error": line_item_serializer.errors}, status=400
-                            )
-
-                for line_item_id in line_item_ids_to_remove:
-                    removed_line_item = existing_line_items_dict[line_item_id]
-                    if salesorder_item_id in quantity_changes:
-                        quantity_changes[
-                            removed_line_item.salesorder_item_id
-                        ] += -removed_line_item.quantity
-                    else:
-                        quantity_changes[removed_line_item.salesorder_item_id] = (
-                            -removed_line_item.quantity
-                        )
-                    removed_line_item.delete()
-                    print(
-                        f"Removed line item ID: {line_item_id}, Quantity change: {quantity_changes[removed_line_item.salesorder_item_id]}"
-                    )
-
-                serializer = ClientInvoiceSerializer(
-                    client_invoice_data, data=JSONString, partial=True
-                )
-
-                if serializer.is_valid():
-                    client_invoice = serializer.save()
-                    client_invoice.last_modified_time = datetime.now()
-                    if (
-                        "currency_code" in JSONString
-                        and JSONString.get("currency_code")
-                        != client_invoice.currency_code
-                    ):
-                        rate = get_exchange_rate(JSONString.get("currency_code"), "INR")
-                        client_invoice.exchange_rate = rate
-                        print(f"Exchange rate updated: {rate}")
-
-                    line_item_totals = get_totals_for_client_invoice_line_items(
-                        client_invoice.client_invoice_line_items.all()
-                    )
-                    client_invoice.price_precision = 2
-                    client_invoice.total = line_item_totals["total"]
-                    client_invoice.sub_total = line_item_totals["sub_total"]
-                    client_invoice.sub_total_inclusive_of_tax = line_item_totals[
-                        "sub_total_inclusive_of_tax"
-                    ]
-                    client_invoice.tax_total = line_item_totals["tax_total"]
-                    client_invoice.save()
-                    client_invoice = update_invoice_status_and_balance(client_invoice)
-                    print(f"Client invoice totals updated: {line_item_totals}")
-
-                    sales_order = client_invoice.sales_order
-                    sales_order_line_items = sales_order.so_line_items.all()
-                    sales_order_line_items_dict = {
-                        item.line_item_id: item for item in sales_order_line_items
-                    }
-
-                    for line_item_id, quantity_change in quantity_changes.items():
-                        so_line_item = sales_order_line_items_dict.get(line_item_id)
-                        if so_line_item:
-                            so_line_item.quantity_invoiced += quantity_change
-                            so_line_item.is_invoiced = (
-                                so_line_item.quantity_invoiced >= 0
-                            )
-                            so_line_item.save()
-                            print(
-                                f"Sales order line item updated: {line_item_id}, Quantity invoiced: {so_line_item.quantity_invoiced}"
-                            )
-
-                    sales_order_line_item_totals = get_sales_order_totals(
-                        sales_order.so_line_items.all()
-                    )
-                    print(
-                        f"Sales order line item totals: {sales_order_line_item_totals}"
-                    )
-
-                    if (
-                        sales_order_line_item_totals["total_quantity"]
-                        == sales_order_line_item_totals["total_invoiced_quantity"]
-                    ):
-                        sales_order.status = "invoiced"
-                        sales_order.invoiced_status = "invoiced"
-                    elif sales_order_line_item_totals["total_invoiced_quantity"] == 0:
-                        sales_order.status = "open"
-                        sales_order.invoiced_status = "not_invoiced"
-                    else:
-                        sales_order.status = "partially_invoiced"
-                        sales_order.invoiced_status = "partially_invoiced"
-
-                    sales_order.save()
-                    print(
-                        f"Sales order status updated: {sales_order.status}, Invoiced status: {sales_order.invoiced_status}"
-                    )
-                    res_data = ClientInvoiceSerializer(client_invoice).data
-                    return Response(res_data, status=200)
-                else:
-                    print(f"Error in client invoice serializer: {serializer.errors}")
-                    return Response({"error": serializer.errors}, status=400)
+                print(f"Error in client invoice serializer: {serializer.errors}")
+                return Response({"error": serializer.errors}, status=400)
     except Exception as e:
         print(f"Exception occurred: {str(e)}")
         return Response({"error": str(e)}, status=500)
@@ -5177,3 +4875,166 @@ def create_vendor(request):
             {"error": "Failed to create vendor", "details": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+
+
+@api_view(["POST"])
+def create_asset(request):
+    serializer = AssetsSerializer(data=request.data)
+    if serializer.is_valid():
+        instance = serializer.save()
+        # Set default values for update_entry
+        update_entry = {
+            "date": str(datetime.now()),
+            "status": instance.status,
+        }
+
+        if instance.assigned_to is not None:
+            update_entry["assigned_to"] = instance.assigned_to.id
+            update_entry["assigned_to_name"] = (
+                instance.assigned_to.first_name + " " + instance.assigned_to.last_name
+            )
+        else:
+            update_entry["assigned_to"] = None
+            update_entry["assigned_to_name"] = None
+
+        instance.updates.append(update_entry)
+        instance.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET"])
+def get_all_assets(request):
+    if request.method == "GET":
+        assets = Assets.objects.all().order_by("-update_at")
+        serializer = AssetsDetailedSerializer(assets, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["DELETE"])
+def delete_asset(request):
+    id = request.data.get("id")
+    if not id:
+        return Response({"error": "ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        asset = Assets.objects.get(pk=id)
+    except Assets.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+
+    asset.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["PUT"])
+def update_asset(request):
+    payload = request.data
+    values = payload.get("values")
+    asset_id = payload.get("id")
+
+    if not asset_id:
+        return Response(
+            {"error": "Asset ID is required"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        asset = Assets.objects.get(id=asset_id)
+    except Assets.DoesNotExist:
+        return Response({"error": "Asset not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = AssetsSerializer(
+        asset, data=values, partial=True
+    )  # Use partial=True for partial updates
+
+    if serializer.is_valid():
+        instance = serializer.save()
+
+        update_entry = {
+            "date": datetime.now().isoformat(),
+            "status": instance.status,
+            "assigned_to": instance.assigned_to.id if instance.assigned_to else None,
+            "assigned_to_name": (
+                f"{instance.assigned_to.first_name} {instance.assigned_to.last_name}"
+                if instance.assigned_to
+                else None
+            ),
+        }
+
+        # Ensure updates field is a list before appending
+        if not isinstance(instance.updates, list):
+            instance.updates = []
+
+        instance.updates.append(update_entry)
+        instance.save()
+
+        # Use AssetsDetailedSerializer to include assigned_to_name in the response
+        detailed_serializer = AssetsDetailedSerializer(instance)
+        return Response(detailed_serializer.data)
+
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["PUT"])
+def update_status(request):
+    if request.method == "PUT":
+        asset_id = request.data.get("id")
+        if asset_id is None:
+            return Response(
+                {"error": "Asset ID is required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            asset = Assets.objects.get(pk=asset_id)
+        except Assets.DoesNotExist:
+            return Response(
+                {"error": "Asset does not exist"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        new_status = request.data.get("status")
+        if new_status not in [choice[0] for choice in Assets.STATUS_CHOICES]:
+            return Response(
+                {"error": "Invalid status value"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        asset.status = new_status
+        if new_status == "idle":
+            asset.assigned_to = None
+
+        # Serialize the assigned_to field
+        assigned_to = asset.assigned_to.id if asset.assigned_to else None
+
+        # Append the update to the updates field
+        update_entry = {
+            "date": str(datetime.now()),
+            "status": new_status,
+            "assigned_to": assigned_to,
+        }
+        if not hasattr(asset, "updates"):
+            asset.updates = []  # Initialize if 'updates' field does not exist
+        asset.updates.append(update_entry)
+
+        asset.save()
+        return Response({"success": "Status updated successfully"})
+    return Response(
+        {"error": "Invalid request method"}, status=status.HTTP_405_METHOD_NOT_ALLOWED
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def max_asset_number(request):
+    try:
+        # Get the latest gmsheet_number
+        latest_asset = Assets.objects.latest("created_at")
+
+        latest_number = int(
+            latest_asset.asset_id[3:]
+        )  # Extract the number part and convert to integer
+        next_number = latest_number + 1
+        next_asset_number = (
+            f"NUM{next_number:03}"  # Format the next number to match 'PRO001' format
+        )
+    except Assets.DoesNotExist:
+        # If no GmSheet objects exist, create the first gmsheet_number as 'PRO001'
+        next_asset_number = "NUM001"
+        print(next_asset_number)
+    return JsonResponse({"max_number": next_asset_number})

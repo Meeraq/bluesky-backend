@@ -174,6 +174,7 @@ urlpatterns = [
     path("v2/create-employee/", views.CreateEmployeeView.as_view()),
     path("v2/employees/", views.GetEmployeeListView.as_view()),
     path("v2/update-employee/", views.EmployeeUpdateView.as_view()),
+    path("update-employee/", views.update_employee, name="update_employee"),
     path("v2/delete-employee/", views.DeleteEmployeeView.as_view()),
     path(
         "v2/leader-cumulative-data/",

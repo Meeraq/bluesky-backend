@@ -125,6 +125,7 @@ from api.utils.external import (
 )
 from api.utils.batch import add_contact_in_wati
 from api.utils.auth import update_user_timezone
+from api.utils.profiles import update_profiles_active_inactive
 from .models import (
     Profile,
     Leader,
@@ -3707,3 +3708,115 @@ def update_benchmark(request):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def update_employee(request):
+    try:
+        with transaction.atomic():
+            employee_id = request.data.get("id")
+            if not employee_id:
+                return Response(
+                    {"error": "Employee ID is required."}, status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                employee = Employee.objects.get(id=employee_id)
+            except Employee.DoesNotExist:
+                return Response(
+                    {"error": "Employee not found."}, status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Process input data
+            first_name = request.data.get("first_name", "").title()
+            last_name = request.data.get("last_name", "").title()
+            email = request.data.get("email", "").strip().lower()
+            phone_number = request.data.get("phone_number")
+            add_users = request.data.get("add_users", [])
+            full_name = f"{first_name} {last_name}"
+            
+            # Update the employee record
+            serializer = EmployeeSerializer(employee, data=request.data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+            instance = serializer.save()
+            profile = employee.user
+            
+            # Process role assignments
+            for role_id in add_users:
+                try:
+                    role = Role.objects.get(id=role_id)
+               
+                    # Skip if user already has this role
+                    if role in profile.roles.all():
+                        continue
+                        
+                    profile.roles.add(role)
+                    profile.save()
+                    
+                    # Create role-specific profile based on role name
+                    role_instance = None
+                    role_name = role.name.lower()
+                    
+                    if role_name == "pmo":
+                        role_instance = Pmo.objects.create(
+                            user=profile, 
+                            name=full_name, 
+                            email=email, 
+                            phone=phone_number
+                        )
+                    elif role_name == "sales":
+                        role_instance = Sales.objects.create(
+                            user=profile, 
+                            name=full_name, 
+                            email=email, 
+                            phone=phone_number
+                        )
+                    elif role_name == "finance":
+                        role_instance = Finance.objects.create(
+                            user=profile,
+                            name=full_name,
+                            email=email
+                        )
+                    
+                    if role_instance:
+                        create_user_permission_for_role(role_name, "Manager", profile)
+                except Role.DoesNotExist:
+                    # Log the error but continue processing other roles
+                    print(f"Role with ID {role_id} not found")
+            
+            # Update active/inactive status
+            if instance.status == "active":
+                update_profiles_active_inactive(instance.user, True)
+            else:
+                update_profiles_active_inactive(instance.user, False)
+            
+            return Response(serializer.data)
+    except Exception as e:
+        print(str(e))
+        return Response(
+            {"error": "Failed to updated employee"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def delete_employee(request):
+    employee_id = request.data.get("id")
+    if not employee_id:
+        return Response(
+            {"error": "Employee ID is required."}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        employee = Employee.objects.get(id=employee_id)
+    except Employee.DoesNotExist:
+        return Response(
+            {"error": "Employee not found."}, status=status.HTTP_404_NOT_FOUND
+        )
+
+    employee.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)

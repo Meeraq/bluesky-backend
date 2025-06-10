@@ -21,6 +21,7 @@ from .models import (
     BankDetails,
     Payment,
     CreditNote,
+    Assets
 )
 from zohoapi.utils.common import (
     get_financial_year,
@@ -1046,3 +1047,22 @@ class InvoiceAgingDetailSerializer(serializers.ModelSerializer):
             "amount",
             "balance_due",
         ]
+
+
+class AssetsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Assets
+        fields = "__all__"
+
+
+class AssetsDetailedSerializer(serializers.ModelSerializer):
+    assigned_to_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Assets
+        fields = "__all__"
+        
+    def get_assigned_to_name(self, obj):
+        if obj.assigned_to:
+            return f"{obj.assigned_to.first_name} {obj.assigned_to.last_name}"
+        return None

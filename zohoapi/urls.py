@@ -108,11 +108,6 @@ urlpatterns = [
         views.get_purchase_order_and_invoices,
     ),
     # path("update-vendor-id-to-coaches/", views.update_vendor_id),
-    path(
-        "get-vendors-existing-and-non-existing/",
-        views.get_vendor_exists_and_not_existing_emails,
-    ),
-    path("import-invoices/", views.import_invoices_from_zoho),
     path("export-invoice-data/", views.export_invoice_data),
     path("download-invoice/<int:record_id>/", DownloadInvoice.as_view()),
     path(
@@ -123,7 +118,6 @@ urlpatterns = [
         "download-attatched-invoice/<int:record_id>/",
         DownloadAttatchedInvoice.as_view(),
     ),
-    path("add/vendor/", views.add_vendor),
     path("vendors/", views.get_all_vendors),
     path("zoho-vendors/", views.get_zoho_vendors),
     path(
@@ -191,7 +185,6 @@ urlpatterns = [
         views.get_vendor_details_from_zoho,
         name="get_vendor_details_from_zoho",
     ),
- 
     # path(
     #     "purchase-order/create/<str:user_type>/<int:facilitator_pricing_id>/",
     #     views.create_purchase_order_api,
@@ -202,11 +195,7 @@ urlpatterns = [
         views.get_po_number_to_create,
         name="get_po_number_to_create",
     ),
-    path(
-        "invoice-number/new/",
-        views.get_client_invoice_number_to_create,
-        name="get_client_invoice_number_to_create",
-    ),
+
     path(
         "so-number/",
         views.get_so_number_to_create,
@@ -250,41 +239,6 @@ urlpatterns = [
         "sales-orders/<str:sales_person_id>/",
         views.get_sales_persons_sales_orders,
         name="get_sales_persons_sales_orders",
-    ),
-    path(
-        "get-all-sales-orders-for-project/<int:project_id>/<str:project_type>/",
-        views.get_all_sales_orders_of_project,
-        name="get_all_sales_orders_of_project",
-    ),
-    path(
-        "get-all-client-invoices-for-project/<int:project_id>/<str:project_type>/",
-        views.get_all_client_invoices_of_project,
-        name="get-all-client-invoices-for-project",
-    ),
-    path(
-        "get-ctt-sales-orders/",
-        views.get_ctt_sales_orders,
-        name="get_ctt_sales_orders/",
-    ),
-    path(
-        "get-ctt-client-invoices-for-participant/<str:participant_email>/<str:batch_name>/",
-        views.get_ctt_client_invoices_for_participant,
-        name="get_ctt_client_invoices_for_participant",
-    ),
-    path(
-        "get-ctt-client-invoices/",
-        views.get_ctt_client_invoices,
-        name="get_ctt_client_invoices/",
-    ),
-    path(
-        "ctt-purchase-orders/lxp/",
-        views.get_ctt_purchase_orders_lxp,
-        name="get_ctt_purchase_orders_lxp/",
-    ),
-    path(
-        "get-ctt-invoices/",
-        views.get_ctt_invoices,
-        name="get_ctt_invoices/",
     ),
     path(
         "sales-order/<int:id>/download/",
@@ -554,4 +508,9 @@ urlpatterns = [
         "gmsheet-detail/", views.GMSheetDetailAPIView.as_view(), name="gmsheet-detail"
     ),
     path("create-vendor/", views.create_vendor, name="create_vendor"),
+    path("create-assets/", views.create_asset),
+    path("assets/", views.get_all_assets),
+    path("delete-asset/", views.delete_asset, name="delete_asset"),
+    path("update-asset/", views.update_asset, name="update_asset"),
+     path("asset/maxNumber/", views.max_asset_number, name="max_asset_number"),
 ]
