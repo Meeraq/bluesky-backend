@@ -679,48 +679,52 @@ def generate_otp(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def validate_otp(request):
-    otp_obj = (
-        OTP.objects.filter(
-            user__username=request.data["email"], otp=request.data["otp"]
+    try:
+        otp_obj = (
+            OTP.objects.filter(
+                user__username=request.data["email"], otp=request.data["otp"]
+            )
+            .order_by("-created_at")
+            .first()
         )
-        .order_by("-created_at")
-        .first()
-    )
-    data = request.data
-    platform = data.get("platform", "unknown")
-    current_role = data.get("current_role")
+        data = request.data
+        platform = data.get("platform", "unknown")
+        current_role = data.get("current_role")
 
-    if otp_obj is None:
-        raise AuthenticationFailed("Invalid OTP")
+        if otp_obj is None:
+            raise AuthenticationFailed("Invalid OTP")
 
-    user = otp_obj.user
-    user_email = request.data["email"]
-    otp_obj.delete()
-    last_login = user.last_login
-    login(request, user)
-    user_data, error = get_user_data(user, current_role)
-    if error:
-        return Response({"error": error}, status=400)
-    if user_data:
-        login_timestamp = timezone.now()
-        UserLoginActivity.objects.create(
-            user=user, timestamp=login_timestamp, platform=platform
-        )
-        request_timezone = request.data.get("timezone")
-        if request_timezone:
-            update_user_timezone(user, request_timezone)
-        response = Response(
-            {
-                "detail": "Successfully logged in.",
-                "user": {**user_data, "last_login": last_login},
-            }
-        )
-        response["X-CSRFToken"] = get_token(request)
-        return response
-    else:
-        logout(request)
-        return Response({"error": "Invalid user type"}, status=400)
-
+        user = otp_obj.user
+        user_email = request.data["email"]
+        otp_obj.delete()
+        last_login = user.last_login
+        login(request, user)
+        user_data, error = get_user_data(user, current_role)
+        if error:
+            return Response({"error": error}, status=400)
+        if user_data:
+            login_timestamp = timezone.now()
+            UserLoginActivity.objects.create(
+                user=user, timestamp=login_timestamp, platform=platform
+            )
+            request_timezone = request.data.get("timezone")
+            if request_timezone:
+                update_user_timezone(user, request_timezone)
+            response = Response(
+                {
+                    "detail": "Successfully logged in.",
+                    "user": {**user_data, "last_login": last_login},
+                }
+            )
+            response["X-CSRFToken"] = get_token(request)
+            return response
+        else:
+            logout(request)
+            return Response({"error": "Invalid user type"}, status=400)
+    except Exception as e:
+        print(str(e))
+        # Handle the case where the user with the given email does not exist
+        return Response({"error": "Failed to validate otp."}, status=400)
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, IsInRoles("coach", "pmo", "learner", "hr")])
