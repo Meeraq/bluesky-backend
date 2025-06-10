@@ -254,8 +254,6 @@ class SalesOrderLineItemListSerializer(serializers.ModelSerializer):
     sales_order_id = serializers.SerializerMethodField()
     sales_order_number = serializers.SerializerMethodField()
     client_name = serializers.SerializerMethodField()
-    project_type = serializers.SerializerMethodField()
-    project_name = serializers.SerializerMethodField()
     total = serializers.SerializerMethodField()
     currency_symbol = serializers.SerializerMethodField()
     due_date = serializers.DateField(read_only=True)
@@ -269,8 +267,6 @@ class SalesOrderLineItemListSerializer(serializers.ModelSerializer):
             "client_name",
             "description",
             "due_date",
-            "project_type",
-            "project_name",
             "total",
             "currency_symbol",
         ]
@@ -293,26 +289,7 @@ class SalesOrderLineItemListSerializer(serializers.ModelSerializer):
 
     def get_currency_symbol(self, obj):
         sales_order = obj.salesorder_set.first()
-        return sales_order.currency_symbol if sales_order else None
-
-    def get_project_type(self, obj):
-        sales_order = obj.salesorder_set.first()
-        if sales_order:
-            if sales_order.caas_project:
-                return "Coaching"
-            elif sales_order.schedular_project is not None:
-                return "Skill Training"
-        return None
-
-    def get_project_name(self, obj):
-        sales_order = obj.salesorder_set.first()
-        if sales_order:
-            if sales_order.caas_project:
-                return sales_order.caas_project.name
-            elif sales_order.schedular_project is not None:
-                return sales_order.schedular_project.name
-        return None
-
+        return sales_order.currency_symbol if sales_order else Non
     def get_total(self, obj):
         return obj.item_total or 0.0
 
