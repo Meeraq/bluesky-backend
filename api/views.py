@@ -705,7 +705,7 @@ def validate_otp(request):
         if user_data:
             login_timestamp = timezone.now()
             UserLoginActivity.objects.create(
-                user=user, timestamp=login_timestamp, platform=platform
+                user=user, timestamp=login_timestamp
             )
             request_timezone = request.data.get("timezone")
             if request_timezone:
