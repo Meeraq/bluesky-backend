@@ -335,12 +335,9 @@ urlpatterns = [
     ),
     path("line-items/", views.get_line_items, name="get_line_items"),
     path(
-        "get-ctt-revenue-data/", views.get_ctt_revenue_data, name="get_ctt_revenue_data"
-    ),
-    path(
-        "get-meeraq-revenue-data/",
-        views.get_meeraq_revenue_data,
-        name="get_meeraq_revenue_data",
+        "get-all-revenue-data/",
+        views.get_all_revenue_data,
+        name="get_all_revenue_data",
     ),
     path(
         "get-line-items-detail-in-excel/",
@@ -513,4 +510,10 @@ urlpatterns = [
     path("delete-asset/", views.delete_asset, name="delete_asset"),
     path("update-asset/", views.update_asset, name="update_asset"),
      path("asset/maxNumber/", views.max_asset_number, name="max_asset_number"),
+      path(
+        "dashboard/get-total-revenue-and-cost/",
+        views.get_dashboard_total_revenue_and_cost,
+        name="get_dashboard_total_revenue_and_cost",
+    ),
+    
 ]

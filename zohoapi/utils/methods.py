@@ -551,9 +551,6 @@ def get_current_month_start_and_end_date():
     return created_date_start, created_date_end
 
 
-def get_meeraq_sales_orders():
-    sales_orders = SalesOrder.objects.filter(salesorder_number__icontains="Meeraq")
-    return SalesOrderSerializer(sales_orders, many=True).data
 
 
 def calculate_financials_from_orders(sales_orders, purchase_orders):
@@ -903,14 +900,14 @@ def create_payload_data(data):
 
 
 
-def get_revenue_data(keyword, start_date, end_date):
+def get_revenue_data(start_date, end_date):
     try:
         if start_date:
             start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
         if end_date:
             end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
 
-        filters = Q(salesorder_number__icontains=keyword)
+        filters = Q()
         if start_date and end_date:
             filters &= Q(created_date__range=[start_date, end_date])
 

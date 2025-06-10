@@ -89,7 +89,6 @@ from zohoapi.utils.methods import (
     create_payload_data,
     get_revenue_data,
     calculate_financials_from_orders,
-    get_meeraq_sales_orders,
     zoho_api_request,
     create_purchase_order,
     calculate_total_revenue,
@@ -3129,26 +3128,13 @@ class SalesOrderLineItemListAPIView(generics.ListAPIView):
         return Response({"line_items": serializer.data, "total_sum": total_sum})
 
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def get_ctt_revenue_data(request):
-    start_date = request.query_params.get("start_date", "")
-    end_date = request.query_params.get("end_date", "")
-    revenue_data = get_revenue_data("CTT", start_date, end_date)
-    status_code = (
-        status.HTTP_200_OK
-        if "result" in revenue_data
-        else status.HTTP_500_INTERNAL_SERVER_ERROR
-    )
-    return Response(revenue_data, status=status_code)
-
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def get_meeraq_revenue_data(request):
+def get_all_revenue_data(request):
     start_date = request.query_params.get("start_date", "")
     end_date = request.query_params.get("end_date", "")
-    revenue_data = get_revenue_data("Meeraq", start_date, end_date)
+    revenue_data = get_revenue_data(start_date, end_date)
     status_code = (
         status.HTTP_200_OK
         if "result" in revenue_data
@@ -5038,3 +5024,16 @@ def max_asset_number(request):
         next_asset_number = "NUM001"
         print(next_asset_number)
     return JsonResponse({"max_number": next_asset_number})
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_dashboard_total_revenue_and_cost(request):
+    try:
+        financials = calculate_financials_from_orders(
+            SalesOrder.objects.all(),
+            PurchaseOrder.objects.all(),
+        )
+        return Response(financials)
+    except Exception as e:
+        print(str(e))
+        return Response({"error": str(e)}, status=500)
