@@ -154,13 +154,13 @@ def get_purchase_order_totals(line_items):
         item_tax = item_total - item_sub_total
 
         # Calculate sub_total inclusive of tax
-        # item_sub_total_inclusive_of_tax = item_sub_total + item_tax
+        item_sub_total_inclusive_of_tax = item_sub_total + item_tax
         print("runniing")
         # Aggregate totals
         total += item_total
         sub_total += item_sub_total
-        # sub_total_inclusive_of_tax += item_sub_total_inclusive_of_tax
-        # tax_total += item_tax
+        sub_total_inclusive_of_tax += item_sub_total_inclusive_of_tax
+        tax_total += item_tax
         total_quantity += item_quantity
         total_invoiced_quantity += quantity_invoiced
 
@@ -220,7 +220,6 @@ def process_po_line_item_data(line_items_data, is_edit=False):
         for line_item in line_items_data:
             if not is_edit:
                 line_item["line_item_id"] = random.randint(1000000, 999999999)
-            line_item["item_total"] = line_item["item_sub_total"]
             line_item["quantity_cancelled"] = 0.0
             line_item["quantity_billed"] = 0.0
             line_item["discount"] = 0.0
@@ -794,7 +793,7 @@ def create_singapore_purchase_order(request, JSONString, entity):
                 po_instance.custom_fields
             )
             po_instance.save()
-
+            print(line_items_data)
             for index, line_item in enumerate(line_items_data):
              
                 line_item_serializer = PurchaseOrderLineItemSerializer(data=line_item)

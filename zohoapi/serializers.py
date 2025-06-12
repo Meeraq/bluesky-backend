@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from django.db import transaction
+import random
+from babel.numbers import get_currency_symbol
 from .models import (
     InvoiceData,
     Vendor,
@@ -21,7 +23,7 @@ from .models import (
     BankDetails,
     Payment,
     CreditNote,
-    Assets
+    Assets,
 )
 from zohoapi.utils.common import (
     get_financial_year,
@@ -182,6 +184,90 @@ class ZohoCustomerSerializer(serializers.ModelSerializer):
     def get_is_so_available(self, obj):
         return SalesOrder.objects.filter(zoho_customer=obj).exists()
 
+    def create(self, validated_data):
+
+        # Handle nested address data
+        billing_address_data = validated_data.pop("billing_address", {})
+
+        shipping_address_data = validated_data.pop("shipping_address", {})
+        contact_id = str(random.randint(1000000000, 9999999999))
+        # Map form fields to model fields
+        customer_data = {
+            "contact_name": validated_data.get("contact_name"),
+            "contact_id": contact_id,
+            "company_name": validated_data.get("company_name"),
+            "first_name": validated_data.get("first_name"),
+            "last_name": validated_data.get("last_name"),
+            "email": validated_data.get("email"),
+            "phone": validated_data.get("phone"),
+            "gst_treatment": validated_data.get("gst_treatment"),
+            "tax_percentage": validated_data.get("tax_percentage", 0),
+            "place_of_contact": validated_data.get("place_of_contact"),
+            "pan_no": validated_data.get("pan_no"),
+            "currency_id": validated_data.get("currency_code"),
+            "currency_code": validated_data.get("currency_code"),
+            "currency_symbol": get_currency_symbol(validated_data.get("currency_code")),
+            "payment_terms_label": validated_data.get("payment_terms_label"),
+            "contact_type": validated_data.get("contact_type", "business"),
+            "is_taxable": validated_data.get("tax_preference") == "taxable",
+            "notes": validated_data.get("notes", ""),
+            "billing_address": billing_address_data,
+            "shipping_address": shipping_address_data,
+        }
+        zoho_customer = ZohoCustomer.objects.create(**customer_data)
+        zoho_customer.entity = validated_data.get("entity")
+        zoho_customer.save()
+        return zoho_customer
+
+    def update(self, instance, validated_data):
+        # Handle nested address data
+        billing_address_data = validated_data.pop("billing_address", {})
+
+        shipping_address_data = validated_data.pop("shipping_address", {})
+
+        # Map form fields to model fields
+        instance.contact_name = validated_data.get(
+            "contact_name", instance.contact_name
+        )
+        instance.company_name = validated_data.get(
+            "company_name", instance.company_name
+        )
+        instance.first_name = validated_data.get("first_name", instance.first_name)
+        instance.last_name = validated_data.get("last_name", instance.last_name)
+        instance.email = validated_data.get("email", instance.email)
+        instance.phone = validated_data.get("phone", instance.phone)
+        instance.gst_treatment = validated_data.get(
+            "gst_treatment", instance.gst_treatment
+        )
+        instance.tax_percentage = validated_data.get(
+            "tax_percentage", instance.tax_percentage
+        )
+        instance.place_of_contact = validated_data.get(
+            "place_of_contact", instance.place_of_contact
+        )
+        instance.pan_no = validated_data.get("pan_no", instance.pan_no)
+        instance.currency_id = validated_data.get("currency_code", instance.currency_code)
+        instance.currency_code = validated_data.get(
+            "currency_code", instance.currency_code
+        )
+        instance.currency_symbol = get_currency_symbol(
+            validated_data.get("currency_code", instance.currency_code)
+        )
+        instance.payment_terms_label = validated_data.get(
+            "payment_terms_label", instance.payment_terms_label
+        )
+        instance.contact_type = validated_data.get(
+            "contact_type", instance.contact_type
+        )
+        instance.is_taxable = validated_data.get("tax_preference") == "taxable"
+        instance.notes = validated_data.get("notes", instance.notes)
+        instance.entity_id = validated_data.get("entity", instance.entity_id)
+        instance.billing_address = billing_address_data
+        instance.shipping_address = shipping_address_data
+
+        instance.save()
+        return instance
+
 
 class ZohoVendorSerializer(serializers.ModelSerializer):
     class Meta:
@@ -289,7 +375,8 @@ class SalesOrderLineItemListSerializer(serializers.ModelSerializer):
 
     def get_currency_symbol(self, obj):
         sales_order = obj.salesorder_set.first()
-        return sales_order.currency_symbol if sales_order else Non
+        return sales_order.currency_symbol if sales_order else None
+
     def get_total(self, obj):
         return obj.item_total or 0.0
 
@@ -1038,7 +1125,7 @@ class AssetsDetailedSerializer(serializers.ModelSerializer):
     class Meta:
         model = Assets
         fields = "__all__"
-        
+
     def get_assigned_to_name(self, obj):
         if obj.assigned_to:
             return f"{obj.assigned_to.first_name} {obj.assigned_to.last_name}"

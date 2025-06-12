@@ -1705,7 +1705,7 @@ def get_customer_details(request, customer_id):
         zoho_vendor = None
 
         if generate_so_without_invoice:
-            zoho_vendor = ZohoCustomer.objects.filter(contact_id=customer_id).first()
+            zoho_vendor = ZohoCustomer.objects.filter(id=customer_id).first()
         else:
             zoho_vendor = ZohoCustomer.objects.filter(id=customer_id).first()
         if zoho_vendor:
@@ -2286,9 +2286,8 @@ def edit_sales_order(request, sales_order_id):
                 ).first()
 
                 sales_user = Sales.objects.filter(
-                    sales_person_id=JSONString.get("salesperson_id")
+                    id=int(JSONString.get("salesperson_id"))
                 ).first()
-
                 rate = get_exchange_rate(JSONString.get("currency_code"), "INR")
 
                 # Associate the ZohoCustomer with the SalesOrder
@@ -2319,7 +2318,7 @@ def edit_sales_order(request, sales_order_id):
                     if JSONString.get("billing_address")
                     else ""
                 )
-                sales_order_data.salesperson_id = sales_user.sales_person_id
+                sales_order_data.salesperson_id = sales_user.id
                 sales_order_data.salesperson_name = sales_user.name
                 sales_order_data.save()
 
@@ -2725,6 +2724,9 @@ def edit_vendor(request, vendor_id):
             zoho_vendor.mobile = data.get("phone", zoho_vendor.mobile)
             zoho_vendor.gst_treatment = data.get(
                 "gst_treatment", zoho_vendor.gst_treatment
+            )
+            zoho_vendor.tax_percentage = data.get(
+                "tax_percentage", zoho_vendor.tax_percentage
             )
             zoho_vendor.gst_no = data.get("gstn_uni", zoho_vendor.gst_no)
             zoho_vendor.pan_no = data.get("pan", zoho_vendor.pan_no)
@@ -3295,24 +3297,17 @@ class ZohoCustomerListCreateView(generics.ListCreateAPIView):
         instance.save()
         return instance
 
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
 
-
-class ZohoCustomerUpdateView(generics.UpdateAPIView):
+class ZohoCustomerUpdateView(generics.RetrieveUpdateAPIView):
     queryset = ZohoCustomer.objects.all()
     serializer_class = ZohoCustomerSerializer
-
+    
     def perform_update(self, serializer):
-        instance = self.get_object()
         instance = serializer.save()
         existing_custom_field_hash = instance.custom_field_hash or {}
         instance.custom_field_hash = existing_custom_field_hash
         instance.save()
         return instance
-
-    def update(self, request, *args, **kwargs):
-        return super().update(request, *args, **kwargs)
 
 
 class CompanyListCreateView(generics.ListCreateAPIView):
@@ -4753,6 +4748,7 @@ def create_vendor(request):
                         "phone", ""
                     ),  # Using phone as mobile if mobile not provided
                     gst_treatment=data.get("gst_treatment"),
+                    tax_percentage=data.get("tax_percentage", 0),
                     gst_no=data.get("gstn_uni", ""),
                     pan_no=data.get("pan", ""),
                     place_of_contact=data.get("place_of_contact", ""),
